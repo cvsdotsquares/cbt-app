@@ -70,9 +70,9 @@ const KYC_VARIANTS: Record<string, 'success' | 'warning' | 'destructive' | 'outl
 
 const READINESS_ITEMS = [
   { icon: Wifi, label: 'Stable internet connection' },
-  { icon: Monitor, label: 'Working webcam & microphone' },
-  { icon: User, label: 'Valid photo ID ready' },
-  { icon: BookOpen, label: 'Quiet, well-lit environment' },
+  { icon: BookOpen, label: 'Quiet place to focus on the test' },
+  { icon: Monitor, label: 'Laptop or tablet with a modern browser' },
+  { icon: User, label: 'Your institute login credentials' },
 ];
 
 export default function MyExamsPage() {
@@ -212,8 +212,14 @@ export default function MyExamsPage() {
             <div className="space-y-2">
               <p className="text-sm font-semibold text-primary">Good {greeting}, {user?.firstName}</p>
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Student Portal</h1>
+              {learning?.batches?.length ? (
+                <p className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-sm font-medium text-primary">
+                  <BookOpen className="h-3.5 w-3.5" />
+                  {learning.batches.map((b) => `${b.academicClass.name} · ${b.name}`).join(' · ')}
+                </p>
+              ) : null}
               <p className="max-w-lg text-muted-foreground">
-                Take AI-generated practice tests, track your progress, and review chapter-wise performance.
+                Take NCERT-aligned class tests, review chapter-wise scores, and track your syllabus progress.
               </p>
             </div>
             {profile && (
@@ -235,7 +241,7 @@ export default function MyExamsPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Assigned Exams" value={stats?.totalExams ?? examList.length} icon={FileText} accent="blue" />
+          <StatCard title="Class Tests" value={stats?.totalExams ?? examList.length} icon={FileText} accent="blue" />
           <StatCard
             title="In Progress"
             value={stats?.inProgressExams ?? 0}
@@ -268,7 +274,7 @@ export default function MyExamsPage() {
                       tab === t ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
-                    {t === 'exams' ? `My Tests (${examList.length})` : t === 'results' ? `Results (${resultList.length})` : 'Progress'}
+                    {t === 'exams' ? `Class Tests (${examList.length})` : t === 'results' ? `Results (${resultList.length})` : 'Syllabus Progress'}
                   </button>
                 ))}
               </div>
@@ -276,7 +282,7 @@ export default function MyExamsPage() {
                 <div className="relative w-full sm:w-56">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search exams..."
+                    placeholder="Search class tests..."
                     className="pl-9"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -364,8 +370,8 @@ export default function MyExamsPage() {
                       <Card className="surface-card">
                         <EmptyState
                           icon={search ? Search : FileText}
-                          title={search ? 'No exams match your search' : 'No exams assigned yet'}
-                          description={search ? 'Try a different search term.' : 'Contact your administrator for exam access.'}
+                          title={search ? 'No tests match your search' : 'No class tests assigned yet'}
+                          description={search ? 'Try a different search term.' : 'Your teacher will assign NCERT class tests after publishing them for your batch.'}
                         />
                       </Card>
                     )}
@@ -543,12 +549,12 @@ export default function MyExamsPage() {
             <Card className="surface-card border-primary/20">
               <CardContent className="space-y-2 p-5">
                 <div className="flex items-center gap-2 text-sm font-bold">
-                  <Shield className="h-4 w-4 text-primary" />
-                  Proctored Environment
+                  <BookOpen className="h-4 w-4 text-primary" />
+                  NCERT Class Tests
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  All examinations are monitored via webcam and screen activity. Tab switching,
-                  copy-paste, and fullscreen exit may be flagged as violations.
+                  Tests are based on chapters your class has studied. Read each question carefully —
+                  some tests may use negative marking. Your answers are saved automatically.
                 </p>
               </CardContent>
             </Card>
@@ -557,7 +563,7 @@ export default function MyExamsPage() {
 
         <div className="flex items-center justify-center gap-2 pb-4 text-xs text-muted-foreground">
           <Shield className="h-3.5 w-3.5" />
-          Secured by CBT Platform · Enterprise examination suite
+          NCERT Institute · Classes 9–12
         </div>
       </main>
 

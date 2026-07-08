@@ -238,9 +238,10 @@ export default function MaterialsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Books & Notes"
-        description="Upload one or more PDFs at once — complete books or chapter files. Chapters are extracted from your files, not from a static list."
-        badge="Knowledge base"
+        title="NCERT Books & Notes"
+        highlight="Books & Notes"
+        description="Upload Class 9–12 NCERT PDFs — complete books or chapter files. Chapters are extracted from your files and power AI class tests."
+        badge="NCERT · Classes 9–12"
       />
 
       <Card className="border-primary/20 bg-primary/[0.03]">

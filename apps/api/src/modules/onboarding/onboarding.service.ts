@@ -84,8 +84,8 @@ export class OnboardingService {
       {
         id: 'ai-test',
         order: 7,
-        title: 'Create AI Test',
-        description: 'Use AI Test Builder: pick subject + batch → generate → assign. Test auto-publishes.',
+        title: 'Create NCERT Class Test',
+        description: 'Use Create Class Test: pick batch + subject → generate from studied chapters → publish on Class Tests.',
         href: '/dashboard/ai-tests',
         done: aiTestCount > 0,
         detail: `${aiTestCount} AI test(s) created`,
@@ -93,8 +93,8 @@ export class OnboardingService {
       {
         id: 'student-take',
         order: 8,
-        title: 'Student Takes Test',
-        description: 'Student logs in at /login → Student Portal → My Tests → Start Exam.',
+        title: 'Student Takes Class Test',
+        description: 'Student logs in → Student Portal → Class Tests → Start.',
         href: '/my-exams',
         done: aiTestCount > 0 && enrollmentCount > 0,
         detail: 'Student: candidate@example.com / Candidate@123',

@@ -39,7 +39,9 @@ export default function TeacherPage() {
     <div className="space-y-6">
       <PageHeader
         title="Teacher Hub"
+        highlight="Hub"
         description="Monitor batch performance, identify weak topics, and track chapter-wise analytics"
+        badge="NCERT · Classes 9–12"
       />
 
       <div className="flex flex-wrap gap-2">

@@ -4,19 +4,21 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Upload, Sparkles, Award, Settings, UserCog, ClipboardList,
+  BookOpen, School,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Permission } from '@cbt/shared';
 import { Logo } from './logo';
 
-/** Simple primary nav — everything else lives under Settings or direct links from Home */
+/** NCERT institute workflow — books → classes → syllabus → tests → students → results */
 const mainNav = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard, permission: Permission.ANALYTICS_VIEW, exact: true },
-  { href: '/dashboard/ai-tests', label: 'Create Test', icon: Sparkles, permission: Permission.AI_GENERATE_TEST },
-  { href: '/dashboard/exams', label: 'Exams', icon: ClipboardList, permission: Permission.EXAM_READ },
-  { href: '/dashboard/batches', label: 'Classes & Batches', icon: Users, permission: Permission.BATCH_READ },
-  { href: '/dashboard/materials', label: 'Books & Notes', icon: Upload, permission: Permission.MATERIAL_READ },
+  { href: '/dashboard/materials', label: 'NCERT Books', icon: Upload, permission: Permission.MATERIAL_READ },
+  { href: '/dashboard/batches', label: 'Classes & Batches', icon: School, permission: Permission.BATCH_READ },
+  { href: '/dashboard/syllabus', label: 'Syllabus', icon: BookOpen, permission: Permission.CURRICULUM_READ },
+  { href: '/dashboard/ai-tests', label: 'Create Class Test', icon: Sparkles, permission: Permission.AI_GENERATE_TEST },
+  { href: '/dashboard/exams', label: 'Class Tests', icon: ClipboardList, permission: Permission.EXAM_READ },
   { href: '/dashboard/candidates', label: 'Students', icon: Users, permission: Permission.CANDIDATE_READ },
   { href: '/dashboard/results', label: 'Results', icon: Award, permission: Permission.RESULT_READ },
 ];

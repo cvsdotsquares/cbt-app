@@ -44,6 +44,7 @@ export default function InstitutesPage() {
       <PageHeader
         title="Institutes"
         description="Manage coaching institutes and schools on the platform"
+        badge="Platform"
       >
         <Button onClick={() => setShowCreate(!showCreate)}>Add Institute</Button>
       </PageHeader>

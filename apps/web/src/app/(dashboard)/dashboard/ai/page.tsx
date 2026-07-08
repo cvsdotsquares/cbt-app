@@ -88,6 +88,7 @@ export default function AiStudioPage() {
     <div className="space-y-8">
       <PageHeader
         title="AI Studio"
+        highlight="Studio"
         description="Generate questions with OpenAI, analyze exams, and power intelligent proctoring"
         badge="AI Powered"
       />

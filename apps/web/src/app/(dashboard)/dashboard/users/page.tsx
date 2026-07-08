@@ -130,9 +130,10 @@ export default function UsersPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="User Management"
-        description="Manage organization users and role assignments"
-        badge={data ? `${items.length} on page` : undefined}
+        title="Staff & Teachers"
+        highlight="Teachers"
+        description="Manage institute staff accounts and role assignments"
+        badge={data ? `${items.length} on page` : 'Institute team'}
       >
         {can(Permission.USER_CREATE) && (
           <CreateUserDialog accessToken={accessToken!} roles={roleList} />

@@ -10,7 +10,7 @@ export default function GlobalError({
   return (
     <html lang="en">
       <body className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 font-sans text-center">
-        <h1 className="text-2xl font-bold">CBT Platform</h1>
+        <h1 className="text-2xl font-bold">NCERT Institute</h1>
         <p className="text-muted-foreground">A critical error occurred. Please reload the page.</p>
         <button
           type="button"

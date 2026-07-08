@@ -121,7 +121,7 @@ export default function AiTestsPage() {
       });
       toast({
         title: 'Draft exam created',
-        description: d.message ?? 'Review AI-generated questions below, then publish from Exams.',
+        description: d.message ?? 'Review AI-generated questions below, then publish from Class Tests.',
       });
     },
     onError: (e: Error) => toast({ title: 'Could not create test', description: e.message, variant: 'destructive' }),
@@ -136,7 +136,8 @@ export default function AiTestsPage() {
         <StepIndicator activeStep={3} />
         <PageHeader
           title="Review your test"
-          description="Edit any AI-generated question or answer, then publish from Exams when you are satisfied."
+          highlight="test"
+          description="Edit any AI-generated question or answer, then publish from Class Tests when you are satisfied."
           badge="Step 3 · Review"
         />
         <AiTestQuestionsReview
@@ -155,9 +156,10 @@ export default function AiTestsPage() {
       <StepIndicator activeStep={activeStep} />
 
       <PageHeader
-        title="Create Test"
-        description="Build a draft exam from your uploaded books. Questions are generated only from indexed material for the selected batch and studied chapters."
-        badge="AI · Upload-sourced"
+        title="Create Class Test"
+        highlight="Class Test"
+        description="Build a NCERT-aligned draft test from uploaded books. Questions are generated only from indexed chapters your batch has studied."
+        badge="NCERT · AI"
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">

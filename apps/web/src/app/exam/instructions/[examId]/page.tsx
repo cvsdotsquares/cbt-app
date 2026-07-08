@@ -74,7 +74,7 @@ export default function ExamInstructionsPage() {
         <div className="space-y-2 text-center">
           <Badge variant="secondary" className="mb-2">{exam.code}</Badge>
           <h1 className="text-3xl font-bold tracking-tight">{exam.title}</h1>
-          <p className="text-muted-foreground">Please read all instructions carefully before starting</p>
+          <p className="text-muted-foreground">NCERT class test — read all instructions before you begin</p>
           <Badge variant={status.variant}>{status.label}</Badge>
         </div>
 
@@ -82,7 +82,7 @@ export default function ExamInstructionsPage() {
           <CardContent className="flex items-start gap-3 p-5">
             <Calendar className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
             <div>
-              <p className="text-sm font-semibold">Exam Schedule</p>
+              <p className="text-sm font-semibold">Test window</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {formatExamTimeRange(exam.startTime, exam.endTime, tz)}
               </p>
@@ -93,9 +93,9 @@ export default function ExamInstructionsPage() {
         {status.actionDisabled && status.phase !== 'submitted' && (
           <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
             <CardContent className="p-4 text-sm text-amber-800 dark:text-amber-200">
-              {status.phase === 'upcoming' && 'This exam is not open yet. Check the schedule above.'}
-              {status.phase === 'ended' && 'The exam window has ended. You can no longer start this exam.'}
-              {status.phase === 'unavailable' && 'This exam has not been published yet. Check back after your teacher publishes it.'}
+              {status.phase === 'upcoming' && 'This class test is not open yet. Check the schedule above.'}
+              {status.phase === 'ended' && 'The test window has ended. You can no longer start this test.'}
+              {status.phase === 'unavailable' && 'This test has not been published yet. Check back after your teacher publishes it.'}
             </CardContent>
           </Card>
         )}
@@ -116,34 +116,37 @@ export default function ExamInstructionsPage() {
           ))}
         </div>
 
+        {security.fullscreen || security.blockCopyPaste || security.proctoringEnabled ? (
         <Card className="surface-card border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Shield className="h-5 w-5 text-amber-600" /> Security Rules
+              <Shield className="h-5 w-5 text-amber-600" /> Test Rules
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {security.fullscreen && <p>• Fullscreen mode is mandatory</p>}
+            {security.fullscreen && <p>• Fullscreen mode is required during the test</p>}
             {security.blockCopyPaste && <p>• Copy, paste, and right-click are disabled</p>}
-            <p>• Tab switching is monitored and recorded</p>
-            {security.proctoringEnabled && <p>• AI proctoring is active — violations may terminate your session</p>}
+            {security.proctoringEnabled && <p>• This test is proctored — tab switching may be recorded</p>}
+            {!security.proctoringEnabled && <p>• Stay on this tab until you submit your answers</p>}
           </CardContent>
         </Card>
+        ) : null}
 
         <Card className="surface-card">
           <CardHeader className="pb-3"><CardTitle className="text-base">General Instructions</CardTitle></CardHeader>
           <CardContent className="space-y-1.5 text-sm text-muted-foreground">
-            <p>1. Ensure a stable internet connection before starting.</p>
-            <p>2. Do not refresh or close the browser during the exam.</p>
-            <p>3. Use &quot;Mark for Review&quot; to revisit questions later.</p>
-            <p>4. The timer auto-submits when time expires.</p>
+            <p>1. Questions are based on NCERT chapters your class has studied.</p>
+            <p>2. Ensure a stable internet connection before starting.</p>
+            <p>3. Do not refresh or close the browser during the test.</p>
+            <p>4. Use &quot;Mark for Review&quot; to revisit questions before submitting.</p>
+            <p>5. The timer auto-submits when time expires.</p>
           </CardContent>
         </Card>
 
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border bg-card p-5 shadow-card">
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1" disabled={status.actionDisabled} />
           <span className="text-sm">
-            I, <strong>{user?.firstName} {user?.lastName}</strong>, confirm that I have read and understood all exam rules and agree to comply with security policies.
+            I, <strong>{user?.firstName} {user?.lastName}</strong>, confirm that I have read the instructions and am ready to begin this class test.
           </span>
         </label>
 
@@ -161,7 +164,7 @@ export default function ExamInstructionsPage() {
           }}
         >
           <CheckCircle2 className="mr-2 h-5 w-5" />
-          {status.phase === 'in_progress' ? 'Resume Examination' : 'Begin Examination'}
+          {status.phase === 'in_progress' ? 'Resume Class Test' : 'Begin Class Test'}
         </Button>
       </main>
     </div>

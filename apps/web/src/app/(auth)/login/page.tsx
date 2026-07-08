@@ -11,19 +11,19 @@ import { useAuthStore } from '@/stores/auth-store';
 import { normalizeRoles } from '@/lib/roles';
 import { getSafeRedirectPath } from '@/lib/safe-redirect';
 import { Logo } from '@/components/layout/logo';
-import { Shield, BarChart3, Users, Lock, Sparkles, Eye } from 'lucide-react';
+import { BookOpen, BarChart3, GraduationCap, Sparkles, Eye } from 'lucide-react';
 
 const features = [
-  { icon: Shield, title: 'AI Proctoring', desc: 'Real-time integrity monitoring with risk scoring' },
-  { icon: BarChart3, title: 'Live Analytics', desc: 'Performance dashboards and AI-powered insights' },
-  { icon: Sparkles, title: 'AI Question Studio', desc: 'Generate exam content in seconds' },
-  { icon: Users, title: 'Enterprise RBAC', desc: 'Multi-tenant role-based access control' },
+  { icon: BookOpen, title: 'NCERT Books', desc: 'Upload Class 9–12 PDFs — chapters extracted automatically' },
+  { icon: GraduationCap, title: 'Class & Batch Management', desc: 'Organize students by NCERT class and academic year' },
+  { icon: Sparkles, title: 'AI Class Tests', desc: 'Chapter-wise questions from your uploaded syllabus' },
+  { icon: BarChart3, title: 'Progress Tracking', desc: 'Syllabus completion and topic mastery per student' },
 ];
 
 const stats = [
-  { value: '99.9%', label: 'Uptime SLA' },
-  { value: '50K+', label: 'Exams Conducted' },
-  { value: '<1s', label: 'Response Time' },
+  { value: '9–12', label: 'NCERT Classes' },
+  { value: '4', label: 'Core Subjects' },
+  { value: 'AI', label: 'Syllabus-aligned Tests' },
 ];
 
 export default function LoginPage() {
@@ -126,16 +126,16 @@ export default function LoginPage() {
         <div className="relative space-y-10 px-12">
           <div>
             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 backdrop-blur-sm">
-              <Eye className="h-3.5 w-3.5" /> Trusted by 200+ institutions
+              <Eye className="h-3.5 w-3.5" /> NCERT · Classes 9–12
             </p>
             <h1 className="text-[42px] font-bold leading-[1.15] tracking-tight text-white">
-              The future of<br />
+              Institute examinations<br />
               <span className="bg-gradient-to-r from-indigo-300 to-violet-300 bg-clip-text text-transparent">
-                secure examinations
+                aligned to your syllabus
               </span>
             </h1>
             <p className="mt-5 max-w-md text-[15px] leading-relaxed text-white/60">
-              Enterprise-grade computer-based testing with AI proctoring, real-time analytics, and end-to-end exam lifecycle management.
+              Upload NCERT books, track chapter progress by class and batch, and run AI-generated class tests from material your students have studied.
             </p>
           </div>
 
@@ -161,7 +161,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="relative px-12 pb-10 text-xs text-white/30">© 2026 CBT Platform. Enterprise Examination Suite.</p>
+        <p className="relative px-12 pb-10 text-xs text-white/30">© 2026 NCERT Institute Platform · Classes 9–12</p>
       </div>
 
       {/* Login form */}
@@ -174,7 +174,7 @@ export default function LoginPage() {
 
           <div className="space-y-2">
             <h2 className="text-[28px] font-bold tracking-tight">Welcome back</h2>
-            <p className="text-muted-foreground">Sign in to your organization account</p>
+            <p className="text-muted-foreground">Sign in to your institute account</p>
           </div>
 
           <form onSubmit={handleSubmit} className="glass-panel space-y-5 p-8">
@@ -190,7 +190,7 @@ export default function LoginPage() {
                 name="email"
                 type="email"
                 autoComplete="username"
-                placeholder="you@organization.com"
+                placeholder="teacher@institute.edu"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -210,8 +210,7 @@ export default function LoginPage() {
               />
             </div>
             <Button type="submit" className="w-full" size="lg" disabled={loading}>
-              <Lock className="mr-2 h-4 w-4" />
-              {loading ? 'Signing in...' : 'Sign in to Dashboard'}
+              {loading ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
 
@@ -220,16 +219,16 @@ export default function LoginPage() {
             <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Demo Credentials</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <Button type="button" variant="outline" disabled={loading} onClick={() => fillDemo('admin')}>
-                Sign in as Admin
+                Sign in as Teacher
               </Button>
               <Button type="button" variant="outline" disabled={loading} onClick={() => fillDemo('candidate')}>
-                Sign in as Candidate
+                Sign in as Student
               </Button>
             </div>
             <p className="pt-3 text-center text-xs text-muted-foreground">
-              Admin: <span className="font-semibold text-foreground">Admin@123</span>
+              Teacher: <span className="font-semibold text-foreground">Admin@123</span>
               {' · '}
-              Candidate: <span className="font-semibold text-foreground">Candidate@123</span>
+              Student: <span className="font-semibold text-foreground">Candidate@123</span>
             </p>
           </div>
           )}

@@ -1,22 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { examsApi, resultsApi, type SubjectiveResponseItem } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { examsApi, resultsApi, type ExamListItem, type SubjectiveResponseItem } from '@/lib/api';
 import { useRequireAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Permission } from '@cbt/shared';
 import { toast } from '@/hooks/use-toast';
 import { PageHeader } from '@/components/layout/page-header';
-import { DataTable, DataTableHeader, DataTableHead, DataTableRow, DataTableCell } from '@/components/layout/data-table';
-import { Download, ClipboardCheck } from 'lucide-react';
+import { StatCard } from '@/components/layout/stat-card';
+import { EmptyState } from '@/components/layout/data-table';
+import { TableSkeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import {
+  Download, ClipboardCheck, Award, Users, BarChart3, CheckCircle2,
+  GraduationCap, ArrowLeft, Trophy, FileSpreadsheet, Sparkles,
+} from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import Link from 'next/link';
+
+function questionCount(exam: ExamListItem) {
+  return (exam.sections || []).reduce((sum, s) => sum + (s._count?.questions ?? 0), 0);
+}
 
 export default function ResultsPage() {
   const { accessToken } = useRequireAuth(true);
@@ -27,11 +39,18 @@ export default function ResultsPage() {
   const [gradeTarget, setGradeTarget] = useState<SubjectiveResponseItem | null>(null);
   const [gradeMarks, setGradeMarks] = useState('');
 
-  const { data: exams } = useQuery({
+  const { data: exams, isLoading: examsLoading } = useQuery({
     queryKey: ['exams'],
     queryFn: () => examsApi.list(accessToken!),
     enabled: !!accessToken,
   });
+
+  const classTests = useMemo(() => {
+    const items = (exams?.items ?? []).filter((e) => e.aiTestConfig);
+    return [...items].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  }, [exams]);
+
+  const selectedMeta = classTests.find((e) => e.id === selectedExam) ?? (exams?.items ?? []).find((e) => e.id === selectedExam);
 
   const { data: results, isLoading, isError, error } = useQuery({
     queryKey: ['results', selectedExam],
@@ -45,12 +64,23 @@ export default function ResultsPage() {
     enabled: !!accessToken && !!selectedExam && showGrading,
   });
 
-  const unpublishedCount = (results?.items ?? []).filter((r) => !r.published).length;
+  const resultItems = results?.items ?? [];
+  const unpublishedCount = resultItems.filter((r) => !r.published).length;
+  const publishedCount = resultItems.filter((r) => r.published).length;
   const pendingGrading = (subjective || []).filter((r) => r.marksAwarded == null).length;
+  const avgScore = resultItems.length
+    ? resultItems.reduce((sum, r) => sum + r.percentage, 0) / resultItems.length
+    : null;
+  const topScore = resultItems.length
+    ? Math.max(...resultItems.map((r) => r.percentage))
+    : null;
 
   const rankMutation = useMutation({
     mutationFn: (examId: string) => resultsApi.rank(accessToken!, examId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['results', selectedExam] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['results', selectedExam] });
+      toast({ title: 'Ranks updated', variant: 'success' });
+    },
     onError: (e: Error) => toast({ title: 'Rank calculation failed', description: e.message, variant: 'destructive' }),
   });
 
@@ -58,7 +88,7 @@ export default function ResultsPage() {
     mutationFn: (examId: string) => resultsApi.publish(accessToken!, examId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['results', selectedExam] });
-      toast({ title: 'Results published', description: 'Ranks were calculated automatically.', variant: 'success' });
+      toast({ title: 'Results published', description: 'Students can now see scores in the Student Portal.', variant: 'success' });
     },
     onError: (e: Error) => toast({ title: 'Publish failed', description: e.message, variant: 'destructive' }),
   });
@@ -82,7 +112,7 @@ export default function ResultsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `results-${selectedExam}.csv`;
+      a.download = `results-${selectedMeta?.code || selectedExam}.csv`;
       a.click();
       URL.revokeObjectURL(url);
       toast({ title: 'Export downloaded', variant: 'success' });
@@ -99,112 +129,359 @@ export default function ResultsPage() {
     return String(answer);
   }
 
-  return (
-    <div className="space-y-6">
-      <PageHeader title="Results" description="View, rank, and publish examination results">
-        <select className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-sm" value={selectedExam} onChange={(e) => { setSelectedExam(e.target.value); setShowGrading(false); }}>
-          <option value="">Select exam...</option>
-          {(exams?.items ?? []).map((e) => (
-            <option key={e.id} value={e.id}>{e.code} — {e.title}</option>
-          ))}
-        </select>
-        {selectedExam && (
-          <>
-            {can(Permission.RESULT_RANK) && (
-              <Button variant="outline" onClick={() => rankMutation.mutate(selectedExam)}>Calculate Ranks</Button>
-            )}
-            {can(Permission.RESULT_PUBLISH) && (
-              <Button onClick={() => publishMutation.mutate(selectedExam)}>Publish</Button>
-            )}
-            {can(Permission.RESULT_EVALUATE) && (
-              <Button variant="outline" onClick={() => setShowGrading(!showGrading)}>
-                <ClipboardCheck className="mr-2 h-4 w-4" />
-                Manual Grading{pendingGrading > 0 ? ` (${pendingGrading})` : ''}
+  function selectExam(id: string) {
+    setSelectedExam(id);
+    setShowGrading(false);
+  }
+
+  // ─── No exam selected: pick a class test ─────────────────────────────────
+  if (!selectedExam) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Results"
+          description="Review scores, ranks, and publish results for NCERT class tests."
+          badge="NCERT · Classes 9–12"
+        />
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <StatCard title="Class tests" value={classTests.length} icon={FileSpreadsheet} accent="blue" />
+          <StatCard
+            title="With submissions"
+            value={classTests.filter((e) => (e._count?.results ?? 0) > 0 || (e._count?.sessions ?? 0) > 0).length}
+            icon={Users}
+            accent="green"
+          />
+          <StatCard
+            title="Published"
+            value={classTests.filter((e) => e.status === 'PUBLISHED' || e.status === 'COMPLETED').length}
+            icon={CheckCircle2}
+            accent="violet"
+          />
+        </div>
+
+        {examsLoading ? (
+          <TableSkeleton rows={4} cols={1} />
+        ) : classTests.length === 0 ? (
+          <Card className="surface-card">
+            <EmptyState
+              icon={Award}
+              title="No class tests yet"
+              description="Create and publish a class test first. Once students submit, their scores will appear here."
+            />
+            <div className="flex justify-center gap-3 pb-8">
+              <Button asChild>
+                <Link href="/dashboard/ai-tests">
+                  <Sparkles className="mr-2 h-4 w-4" /> Create Class Test
+                </Link>
               </Button>
-            )}
-            {can(Permission.RESULT_READ) && (
-              <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" /> Export</Button>
-            )}
-          </>
+              <Button variant="outline" asChild>
+                <Link href="/dashboard/exams">View Class Tests</Link>
+              </Button>
+            </div>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold tracking-tight">Select a class test</h3>
+                <p className="text-sm text-muted-foreground">
+                  Choose a test to view student scores, calculate ranks, and publish results.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {classTests.map((exam) => {
+                const batch = exam.aiTestConfig?.batch;
+                const sessions = exam._count?.sessions ?? 0;
+                const resultCount = exam._count?.results ?? 0;
+                const hasData = resultCount > 0 || sessions > 0;
+
+                return (
+                  <button
+                    key={exam.id}
+                    type="button"
+                    onClick={() => selectExam(exam.id)}
+                    className={cn(
+                      'group text-left rounded-2xl border border-border/60 bg-card p-5 shadow-sm transition-all',
+                      'hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+                        <Award className="h-5 w-5" />
+                      </div>
+                      <Badge variant={exam.status === 'PUBLISHED' || exam.status === 'COMPLETED' ? 'success' : 'secondary'}>
+                        {exam.status}
+                      </Badge>
+                    </div>
+
+                    <h4 className="mt-4 font-bold leading-snug line-clamp-2">{exam.title}</h4>
+                    <p className="mt-1 text-xs font-medium text-muted-foreground">{exam.code}</p>
+
+                    {batch && (
+                      <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                        <GraduationCap className="h-3 w-3" />
+                        {batch.academicClass.name} · {batch.name}
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3 w-3" />
+                        {exam._count?.registrations ?? 0} students
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <BarChart3 className="h-3 w-3" />
+                        {resultCount > 0 ? `${resultCount} results` : hasData ? `${sessions} sessions` : 'No scores yet'}
+                      </span>
+                      <span>{questionCount(exam)} Qs</span>
+                    </div>
+
+                    <p className="mt-4 text-xs font-semibold text-primary opacity-0 transition-opacity group-hover:opacity-100">
+                      Open results →
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── Exam selected: detail view ──────────────────────────────────────────
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        title={selectedMeta?.title ?? 'Results'}
+        highlight={selectedMeta?.title?.split(/\s+/).slice(-2).join(' ')}
+        description={
+          selectedMeta?.aiTestConfig?.batch
+            ? `${selectedMeta.code} · ${selectedMeta.aiTestConfig.batch.academicClass.name} · ${selectedMeta.aiTestConfig.batch.name}`
+            : selectedMeta?.code ?? 'Class test results'
+        }
+        badge="Results"
+      >
+        <Button variant="outline" size="sm" onClick={() => { setSelectedExam(''); setShowGrading(false); }}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> All tests
+        </Button>
+        {can(Permission.RESULT_RANK) && (
+          <Button variant="outline" size="sm" disabled={rankMutation.isPending || resultItems.length === 0} onClick={() => rankMutation.mutate(selectedExam)}>
+            <Trophy className="mr-2 h-4 w-4" />
+            {rankMutation.isPending ? 'Calculating…' : 'Calculate ranks'}
+          </Button>
+        )}
+        {can(Permission.RESULT_EVALUATE) && (
+          <Button variant="outline" size="sm" onClick={() => setShowGrading(!showGrading)}>
+            <ClipboardCheck className="mr-2 h-4 w-4" />
+            {showGrading ? 'Score table' : `Manual grading${pendingGrading > 0 ? ` (${pendingGrading})` : ''}`}
+          </Button>
+        )}
+        {can(Permission.RESULT_READ) && (
+          <Button variant="outline" size="sm" disabled={!resultItems.length} onClick={exportCsv}>
+            <Download className="mr-2 h-4 w-4" /> Export CSV
+          </Button>
+        )}
+        {can(Permission.RESULT_PUBLISH) && (
+          <Button size="sm" disabled={publishMutation.isPending || resultItems.length === 0} onClick={() => publishMutation.mutate(selectedExam)}>
+            {publishMutation.isPending ? 'Publishing…' : 'Publish to students'}
+          </Button>
         )}
       </PageHeader>
 
-      {showGrading && selectedExam && can(Permission.RESULT_EVALUATE) && (
-        <DataTable>
-          <table className="w-full">
-            <DataTableHeader>
-              <DataTableHead>Candidate</DataTableHead>
-              <DataTableHead>Question</DataTableHead>
-              <DataTableHead>Type</DataTableHead>
-              <DataTableHead>Answer</DataTableHead>
-              <DataTableHead>Marks</DataTableHead>
-              <DataTableHead>Action</DataTableHead>
-            </DataTableHeader>
-            <tbody>
-              {(subjective || []).map((r) => (
-                <DataTableRow key={r.id}>
-                  <DataTableCell className="font-medium">
-                    {r.session.candidate.user.firstName} {r.session.candidate.user.lastName}
-                  </DataTableCell>
-                  <DataTableCell>{r.question.title}</DataTableCell>
-                  <DataTableCell><Badge variant="outline">{r.question.type}</Badge></DataTableCell>
-                  <DataTableCell className="max-w-xs truncate text-xs">{formatAnswer(r.answer)}</DataTableCell>
-                  <DataTableCell>
-                    {r.marksAwarded != null ? `${r.marksAwarded}/${r.question.versions[0]?.marks ?? '?'}` : 'Pending'}
-                  </DataTableCell>
-                  <DataTableCell>
-                    <Button size="sm" variant="outline" onClick={() => {
-                      setGradeTarget(r);
-                      setGradeMarks(r.marksAwarded != null ? String(r.marksAwarded) : '');
-                    }}>
-                      Grade
-                    </Button>
-                  </DataTableCell>
-                </DataTableRow>
-              ))}
-            </tbody>
-          </table>
-          {!subjective?.length && <p className="p-8 text-center text-muted-foreground">No subjective responses for this exam.</p>}
-        </DataTable>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Students scored" value={resultItems.length} icon={Users} accent="blue" />
+        <StatCard
+          title="Average %"
+          value={avgScore != null ? `${avgScore.toFixed(1)}%` : '—'}
+          icon={BarChart3}
+          accent="violet"
+        />
+        <StatCard
+          title="Top score"
+          value={topScore != null ? `${topScore.toFixed(1)}%` : '—'}
+          icon={Trophy}
+          accent="amber"
+        />
+        <StatCard
+          title="Published"
+          value={publishedCount}
+          icon={CheckCircle2}
+          accent="green"
+          trend={unpublishedCount > 0 ? `${unpublishedCount} draft` : undefined}
+        />
+      </div>
+
+      {unpublishedCount > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+            <p>
+              <strong>{unpublishedCount}</strong> result{unpublishedCount === 1 ? '' : 's'} still in draft.
+              Students will only see scores after you publish.
+            </p>
+            {can(Permission.RESULT_PUBLISH) && (
+              <Button size="sm" onClick={() => publishMutation.mutate(selectedExam)} disabled={publishMutation.isPending}>
+                Publish now
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       )}
 
-      {isLoading && selectedExam && <div>Loading results...</div>}
-      {isError && selectedExam && (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load results: {error instanceof Error ? error.message : 'Unknown error'}
-        </p>
+      {isLoading && <TableSkeleton rows={5} cols={5} />}
+
+      {isError && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="p-4 text-sm text-destructive">
+            Failed to load results: {error instanceof Error ? error.message : 'Unknown error'}
+          </CardContent>
+        </Card>
       )}
 
-      {selectedExam && !isLoading && !isError && unpublishedCount > 0 && (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
-          {unpublishedCount} result(s) are in draft. Click <strong>Publish</strong> so candidates can see them under My Exams → Results.
-        </p>
+      {showGrading && can(Permission.RESULT_EVALUATE) && !isLoading && (
+        <Card className="surface-card overflow-hidden">
+          <CardHeader className="border-b border-border/60 pb-4">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardCheck className="h-4 w-4 text-primary" />
+              Manual grading
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {(subjective || []).length === 0 ? (
+              <div className="p-8">
+                <EmptyState
+                  icon={ClipboardCheck}
+                  title="No subjective answers"
+                  description="This class test has no pending written/coding responses to grade."
+                />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/60 bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                      <th className="px-5 py-3 font-semibold">Student</th>
+                      <th className="px-5 py-3 font-semibold">Question</th>
+                      <th className="px-5 py-3 font-semibold">Type</th>
+                      <th className="px-5 py-3 font-semibold">Answer</th>
+                      <th className="px-5 py-3 font-semibold">Marks</th>
+                      <th className="px-5 py-3 font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(subjective || []).map((r) => (
+                      <tr key={r.id} className="border-b border-border/40 last:border-0 hover:bg-muted/20">
+                        <td className="px-5 py-3.5 font-medium">
+                          {r.session.candidate.user.firstName} {r.session.candidate.user.lastName}
+                        </td>
+                        <td className="px-5 py-3.5">{r.question.title}</td>
+                        <td className="px-5 py-3.5"><Badge variant="outline">{r.question.type}</Badge></td>
+                        <td className="max-w-xs truncate px-5 py-3.5 text-xs text-muted-foreground">{formatAnswer(r.answer)}</td>
+                        <td className="px-5 py-3.5">
+                          {r.marksAwarded != null ? `${r.marksAwarded}/${r.question.versions[0]?.marks ?? '?'}` : (
+                            <Badge variant="warning">Pending</Badge>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <Button size="sm" variant="outline" onClick={() => {
+                            setGradeTarget(r);
+                            setGradeMarks(r.marksAwarded != null ? String(r.marksAwarded) : '');
+                          }}>
+                            Grade
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
-      {selectedExam && !isLoading && !isError && !showGrading && (
-        <DataTable>
-          <table className="w-full">
-            <DataTableHeader>
-              <DataTableHead>Rank</DataTableHead>
-              <DataTableHead>Candidate</DataTableHead>
-              <DataTableHead>Score</DataTableHead>
-              <DataTableHead>%</DataTableHead>
-              <DataTableHead>Status</DataTableHead>
-            </DataTableHeader>
-            <tbody>
-              {(results?.items ?? []).map((r) => (
-                <DataTableRow key={r.id}>
-                  <DataTableCell className="font-bold text-primary">{r.rank ?? '—'}</DataTableCell>
-                  <DataTableCell className="font-medium">{r.candidate.user.firstName} {r.candidate.user.lastName}</DataTableCell>
-                  <DataTableCell>{r.totalScore}/{r.maxScore}</DataTableCell>
-                  <DataTableCell>{r.percentage.toFixed(1)}%</DataTableCell>
-                  <DataTableCell><Badge variant={r.published ? 'success' : 'secondary'}>{r.published ? 'Published' : 'Draft'}</Badge></DataTableCell>
-                </DataTableRow>
-              ))}
-            </tbody>
-          </table>
-          {!results?.items?.length && <p className="p-8 text-center text-muted-foreground">No results yet.</p>}
-        </DataTable>
+      {!showGrading && !isLoading && !isError && (
+        <Card className="surface-card overflow-hidden">
+          <CardHeader className="border-b border-border/60 pb-4">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Trophy className="h-4 w-4 text-primary" />
+              Scoreboard
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {resultItems.length === 0 ? (
+              <div className="p-8">
+                <EmptyState
+                  icon={Award}
+                  title="No scores yet"
+                  description="Results appear after students submit this class test. Check Class Tests to confirm it’s published and assigned."
+                />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/60 bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                      <th className="px-5 py-3 font-semibold">Rank</th>
+                      <th className="px-5 py-3 font-semibold">Student</th>
+                      <th className="px-5 py-3 font-semibold">Score</th>
+                      <th className="px-5 py-3 font-semibold">Percentage</th>
+                      <th className="px-5 py-3 font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resultItems.map((r) => {
+                      const pct = Math.min(100, r.percentage);
+                      return (
+                        <tr key={r.id} className="border-b border-border/40 last:border-0 hover:bg-muted/20">
+                          <td className="px-5 py-3.5">
+                            <span className={cn(
+                              'inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold',
+                              r.rank === 1 && 'bg-amber-500/15 text-amber-600',
+                              r.rank === 2 && 'bg-slate-400/15 text-slate-600',
+                              r.rank === 3 && 'bg-orange-500/15 text-orange-700',
+                              (!r.rank || r.rank > 3) && 'bg-primary/10 text-primary',
+                            )}>
+                              {r.rank ?? '—'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 font-medium">
+                            {r.candidate.user.firstName} {r.candidate.user.lastName}
+                          </td>
+                          <td className="px-5 py-3.5 tabular-nums">
+                            {r.totalScore}<span className="text-muted-foreground">/{r.maxScore}</span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="flex min-w-[120px] items-center gap-3">
+                              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={cn(
+                                    'h-full rounded-full',
+                                    pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-500',
+                                  )}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className="w-12 text-right tabular-nums font-semibold">{pct.toFixed(1)}%</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <Badge variant={r.published ? 'success' : 'secondary'}>
+                              {r.published ? 'Published' : 'Draft'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       <Dialog open={!!gradeTarget} onOpenChange={(open) => !open && setGradeTarget(null)}>
@@ -215,7 +492,7 @@ export default function ResultsPage() {
               {gradeTarget?.question.title} — max {gradeTarget?.question.versions[0]?.marks ?? 0} marks
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg bg-muted/50 p-3 text-sm max-h-40 overflow-y-auto whitespace-pre-wrap">
+          <div className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-3 text-sm">
             {gradeTarget ? formatAnswer(gradeTarget.answer) : ''}
           </div>
           <div className="space-y-2">

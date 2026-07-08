@@ -21,6 +21,17 @@ type BatchOption = {
 
 type ClassOption = { id: string; level: number; name: string };
 
+const EMPTY_FORM = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  password: '',
+  registrationNumber: '',
+  academicClassId: '',
+  batchId: '',
+  rollNumber: '',
+};
+
 interface CreateCandidateDialogProps {
   accessToken: string;
   batches?: BatchOption[];
@@ -30,10 +41,16 @@ interface CreateCandidateDialogProps {
 export function CreateCandidateDialog({ accessToken, batches = [], classes = [] }: CreateCandidateDialogProps) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    firstName: '', lastName: '', email: '', password: '', registrationNumber: '',
-    academicClassId: '', batchId: '', rollNumber: '',
-  });
+  const [formKey, setFormKey] = useState(0);
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setForm({ ...EMPTY_FORM });
+      setFormKey((k) => k + 1);
+    }
+  }
 
   const batchesForClass = useMemo(() => {
     if (!form.academicClassId) return [];
@@ -63,16 +80,13 @@ export function CreateCandidateDialog({ accessToken, batches = [], classes = [] 
       queryClient.invalidateQueries({ queryKey: ['batches'] });
       toast({ title: 'Student created', variant: 'success' });
       setOpen(false);
-      setForm({
-        firstName: '', lastName: '', email: '', password: '', registrationNumber: '',
-        academicClassId: '', batchId: '', rollNumber: '',
-      });
+      setForm({ ...EMPTY_FORM });
     },
     onError: (e: Error) => toast({ title: 'Failed', description: e.message, variant: 'destructive' }),
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button><Plus className="mr-2 h-4 w-4" /> Add Student</Button>
       </DialogTrigger>
@@ -81,14 +95,14 @@ export function CreateCandidateDialog({ accessToken, batches = [], classes = [] 
           <DialogTitle>Add Student</DialogTitle>
           <DialogDescription>Register a new student and optionally assign a class batch.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-2">
+        <div key={formKey} className="grid gap-4 py-2">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>First name</Label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
-            <div><Label>Last name</Label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
+            <div><Label>First name</Label><Input autoComplete="off" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
+            <div><Label>Last name</Label><Input autoComplete="off" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
           </div>
-          <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-          <div><Label>Password</Label><Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
-          <div><Label>Registration no. (optional)</Label><Input value={form.registrationNumber} onChange={(e) => setForm({ ...form, registrationNumber: e.target.value })} placeholder="Auto-generated if empty" /></div>
+          <div><Label>Email</Label><Input type="email" name="new-student-email" autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+          <div><Label>Password</Label><Input type="password" name="new-student-password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
+          <div><Label>Registration no. (optional)</Label><Input autoComplete="off" value={form.registrationNumber} onChange={(e) => setForm({ ...form, registrationNumber: e.target.value })} placeholder="Auto-generated if empty" /></div>
 
           <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
             <p className="text-sm font-medium">Class &amp; batch (optional)</p>
@@ -126,7 +140,7 @@ export function CreateCandidateDialog({ accessToken, batches = [], classes = [] 
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancel</Button>
           <Button
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending || !form.email || !form.password || !form.firstName}

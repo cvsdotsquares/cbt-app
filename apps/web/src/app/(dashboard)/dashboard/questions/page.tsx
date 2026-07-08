@@ -124,7 +124,12 @@ export default function QuestionsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Question Bank" description="MCQ & MSQ questions with approval workflow" badge={data?.total != null ? `${data.total} total` : undefined}>
+      <PageHeader
+        title="Question Bank"
+        highlight="Bank"
+        description="MCQ & MSQ questions with approval workflow"
+        badge={data?.total != null ? `${data.total} total` : 'Question bank'}
+      >
         <div className="relative w-56">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search questions..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />

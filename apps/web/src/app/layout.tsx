@@ -10,8 +10,8 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'CBT Platform — Enterprise Examination Management',
-  description: 'Secure, AI-powered computer-based testing for universities, recruitment, and certification bodies.',
+  title: 'NCERT Institute — Class-Based Examinations',
+  description: 'NCERT-aligned class tests for institutes. Upload books, track syllabus progress, and run AI-generated chapter-wise assessments for Classes 9–12.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

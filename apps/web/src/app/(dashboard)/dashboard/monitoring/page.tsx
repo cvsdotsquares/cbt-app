@@ -112,7 +112,7 @@ type LiveMonitoringData = {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Live Proctoring" description="Real-time candidate monitoring with AI risk detection and proctor controls" badge="Live">
+      <PageHeader title="Live Monitoring" highlight="Monitoring" description="Real-time candidate monitoring with AI risk detection and proctor controls" badge="Live">
         <select className="form-select w-56" value={examId} onChange={(e) => setExamId(e.target.value)}>
           <option value="">Select exam...</option>
           {(exams?.items ?? []).filter((e) => e.status === 'PUBLISHED').map((e) => (

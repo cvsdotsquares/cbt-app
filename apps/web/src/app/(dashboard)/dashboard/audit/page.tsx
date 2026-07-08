@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { auditApi } from '@/lib/api';
 import { useRequireAuth } from '@/hooks/use-auth';
+import { PageHeader } from '@/components/layout/page-header';
 import { PaginationControls } from '@/components/layout/pagination';
 import { TableSkeleton } from '@/components/ui/skeleton';
 
@@ -22,14 +23,24 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Audit Logs</h1>
-        <p className="text-muted-foreground">Security and compliance audit trail</p>
-      </div>
+      <PageHeader
+        title="Audit Logs"
+        highlight="Logs"
+        description="Security and compliance audit trail for your institute"
+        badge="Compliance"
+      />
       <Card>
         <CardContent className="p-0">
           <table className="w-full text-sm">
-            <thead><tr className="border-b bg-muted/50"><th className="p-3 text-left">Time</th><th className="p-3 text-left">User</th><th className="p-3 text-left">Action</th><th className="p-3 text-left">Resource</th><th className="p-3 text-left">IP</th></tr></thead>
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="p-3 text-left">Time</th>
+                <th className="p-3 text-left">User</th>
+                <th className="p-3 text-left">Action</th>
+                <th className="p-3 text-left">Resource</th>
+                <th className="p-3 text-left">IP</th>
+              </tr>
+            </thead>
             <tbody>
               {(data?.items || []).map((log) => (
                 <tr key={log.id} className="border-b">
@@ -42,14 +53,11 @@ export default function AuditPage() {
               ))}
             </tbody>
           </table>
-          <PaginationControls
-            page={page}
-            totalPages={data?.totalPages ?? 1}
-            total={data?.total}
-            onPageChange={setPage}
-          />
         </CardContent>
       </Card>
+      {data && (
+        <PaginationControls page={page} totalPages={data.totalPages ?? 1} onPageChange={setPage} />
+      )}
     </div>
   );
 }

@@ -22,13 +22,13 @@ export function Logo({ className, variant = 'default' }: { className?: string; v
           'text-[15px] font-bold leading-none tracking-tight',
           isLight ? 'text-white' : 'text-foreground',
         )}>
-          CBT Platform
+          NCERT Institute
         </p>
         <p className={cn(
           'mt-1 text-[10px] font-semibold uppercase tracking-[0.15em]',
           isLight ? 'text-white/60' : 'text-muted-foreground',
         )}>
-          Enterprise Suite
+          Classes 9–12
         </p>
       </div>
     </div>

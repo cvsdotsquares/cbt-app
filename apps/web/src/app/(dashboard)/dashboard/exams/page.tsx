@@ -49,7 +49,7 @@ export default function ExamsPage() {
     mutationFn: (id: string) => examsApi.publish(accessToken!, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exams'] });
-      toast({ title: 'Exam published', variant: 'success' });
+      toast({ title: 'Class test published', variant: 'success' });
     },
     onError: (e: Error) => toast({ title: 'Cannot publish', description: e.message, variant: 'destructive' }),
   });
@@ -59,7 +59,7 @@ export default function ExamsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exams'] });
       setDeleteTarget(null);
-      toast({ title: 'Exam deleted', variant: 'success' });
+      toast({ title: 'Class test deleted', variant: 'success' });
     },
     onError: (e: Error) => toast({ title: 'Cannot delete exam', description: e.message, variant: 'destructive' }),
   });
@@ -97,14 +97,15 @@ export default function ExamsPage() {
 
   if (isLoading) return <TableSkeleton rows={3} cols={1} />;
 
-  const items: ExamItem[] = data?.items || [];
+  const items: ExamItem[] = (data?.items || []).filter((exam) => exam.aiTestConfig);
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Exams"
-        description="Publish and manage tests created from Create Test"
-        badge="Core"
+        title="Class Tests"
+        highlight="Tests"
+        description="Publish and schedule NCERT-aligned tests for your batches. Tests are created from uploaded books via Create Class Test."
+        badge="NCERT · Classes 9–12"
       />
 
       <div className="space-y-3">
@@ -205,12 +206,12 @@ export default function ExamsPage() {
           <Card className="surface-card">
             <EmptyState
               icon={FileText}
-              title="No exams yet"
-              description="Create a test from Create Test — it will appear here for publishing and candidate assignment."
+              title="No class tests yet"
+              description="Create a NCERT-aligned test from uploaded books — it will appear here for scheduling and publishing to your batch."
             />
             <div className="flex justify-center pb-8">
               <Button asChild>
-                <Link href="/dashboard/ai-tests">Go to Create Test</Link>
+                <Link href="/dashboard/ai-tests">Create Class Test</Link>
               </Button>
             </div>
           </Card>
@@ -230,7 +231,7 @@ export default function ExamsPage() {
       <Dialog open={!!scheduleTarget} onOpenChange={(open) => !open && setScheduleTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit exam schedule</DialogTitle>
+            <DialogTitle>Edit class test schedule</DialogTitle>
             <DialogDescription>
               Update start/end times for <span className="font-medium">{scheduleTarget?.title}</span>. Times use the selected timezone.
             </DialogDescription>
@@ -272,10 +273,10 @@ export default function ExamsPage() {
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete exam?</DialogTitle>
+            <DialogTitle>Delete class test?</DialogTitle>
             <DialogDescription>
               Permanently delete <span className="font-medium text-foreground">{deleteTarget?.title}</span> ({deleteTarget?.code}).
-              This removes all questions, candidate assignments, and exam settings. Questions in the bank are not deleted.
+              This removes all questions and student assignments for this test.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

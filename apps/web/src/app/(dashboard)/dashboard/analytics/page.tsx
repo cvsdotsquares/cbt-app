@@ -40,7 +40,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Analytics" description="Exam performance metrics and AI-powered insights" badge="Insights">
+      <PageHeader title="Analytics" highlight="Analytics" description="Exam performance metrics and AI-powered insights" badge="Insights">
         <select className="form-select w-56" value={examId} onChange={(e) => setExamId(e.target.value)}>
           <option value="">Select exam...</option>
           {(exams as { items?: { id: string; title: string }[] })?.items?.map((e) => (

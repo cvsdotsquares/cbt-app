@@ -92,9 +92,10 @@ export default function SettingsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Settings"
-        description="Manage your profile, organization identity, and platform preferences"
-        badge="Organization"
+        title="Institute Settings"
+        highlight="Settings"
+        description="Manage your profile, institute identity, and branding preferences"
+        badge="Institute"
       />
 
       {/* Profile hero */}

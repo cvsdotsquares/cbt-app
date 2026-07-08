@@ -70,8 +70,8 @@ type DashboardData = {
 const workflowSteps = [
   {
     num: 1,
-    title: 'Upload books & notes',
-    desc: 'Add NCERT PDFs — chapters and topics are extracted automatically',
+    title: 'Upload NCERT books',
+    desc: 'Add Class 9–12 PDFs — chapters and topics are extracted automatically',
     href: '/dashboard/materials',
     icon: Upload,
     permission: Permission.MATERIAL_READ,
@@ -88,8 +88,8 @@ const workflowSteps = [
   },
   {
     num: 3,
-    title: 'Create & assign tests',
-    desc: 'AI generates NCERT-aligned questions and publishes to students',
+    title: 'Create & publish class tests',
+    desc: 'AI generates NCERT-aligned questions from studied chapters',
     href: '/dashboard/ai-tests',
     icon: Sparkles,
     permission: Permission.AI_GENERATE_TEST,
@@ -106,8 +106,8 @@ const quickActions: {
   accent: string;
 }[] = [
   {
-    label: 'Create Test',
-    desc: 'AI question builder',
+    label: 'Create Class Test',
+    desc: 'NCERT AI test builder',
     href: '/dashboard/ai-tests',
     icon: Sparkles,
     permission: Permission.AI_GENERATE_TEST,
@@ -122,7 +122,7 @@ const quickActions: {
     accent: 'from-blue-500/15 to-indigo-500/5 text-blue-600',
   },
   {
-    label: 'Books & Notes',
+    label: 'NCERT Books',
     desc: 'Upload study material',
     href: '/dashboard/materials',
     icon: BookOpen,
@@ -146,8 +146,8 @@ const quickActions: {
     accent: 'from-rose-500/15 to-pink-500/5 text-rose-600',
   },
   {
-    label: 'All Exams',
-    desc: 'Schedule & manage',
+    label: 'Class Tests',
+    desc: 'Publish & schedule',
     href: '/dashboard/exams',
     icon: ClipboardList,
     permission: Permission.EXAM_READ,
@@ -258,7 +258,7 @@ export default function DashboardPage() {
               <p className="text-sm font-medium text-primary">
                 Good {greeting}, {user?.firstName}
               </p>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+              <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
                 Welcome to your{' '}
                 <span className="gradient-text">teaching dashboard</span>
               </h1>

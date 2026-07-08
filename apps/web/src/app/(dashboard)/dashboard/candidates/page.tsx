@@ -163,7 +163,7 @@ export default function CandidatesPage() {
       <PageHeader
         title="Students"
         description="Manage students, assign them to class batches (IX–XII), and track KYC"
-        badge={data?.total != null ? `${data.total} total` : undefined}
+        badge={data?.total != null ? `${data.total} total` : 'NCERT · Classes 9–12'}
       >
         {can(Permission.CANDIDATE_CREATE) && (
           <CreateCandidateDialog accessToken={accessToken!} batches={batches ?? []} classes={sortedClasses} />

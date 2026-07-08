@@ -12,17 +12,23 @@ import { useLiveNotifications } from '@/hooks/use-live-notifications';
 import { useNotificationStore } from '@/stores/notification-store';
 
 const pageTitles: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/dashboard/exams': 'Exams',
-  '/dashboard/questions': 'Question Bank',
-  '/dashboard/candidates': 'Candidates',
-  '/dashboard/users': 'User Management',
+  '/dashboard': 'Institute Home',
+  '/dashboard/materials': 'NCERT Books',
+  '/dashboard/batches': 'Classes & Batches',
+  '/dashboard/syllabus': 'Syllabus',
+  '/dashboard/ai-tests': 'Create Class Test',
+  '/dashboard/exams': 'Class Tests',
+  '/dashboard/candidates': 'Students',
   '/dashboard/results': 'Results',
+  '/dashboard/teacher': 'Teacher Hub',
+  '/dashboard/questions': 'Question Bank',
+  '/dashboard/users': 'Staff & Teachers',
   '/dashboard/analytics': 'Analytics',
   '/dashboard/monitoring': 'Live Monitoring',
   '/dashboard/ai': 'AI Studio',
   '/dashboard/audit': 'Audit Logs',
-  '/dashboard/settings': 'Settings',
+  '/dashboard/settings': 'Institute Settings',
+  '/dashboard/institutes': 'Institutes',
 };
 
 export function Header() {
@@ -50,7 +56,7 @@ export function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showNotifications]);
 
-  const pageTitle = pageTitles[pathname] || 'Administration';
+  const pageTitle = pageTitles[pathname] || 'Institute';
   const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
 
   async function handleLogout() {
@@ -65,7 +71,7 @@ export function Header() {
     <header className="sticky top-0 z-40 flex h-[72px] items-center justify-between border-b border-border/60 bg-card/60 px-6 backdrop-blur-xl lg:px-8">
       <div className="space-y-1">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span>Admin</span>
+          <span>Institute</span>
           <ChevronRight className="h-3 w-3" />
           <span className="font-medium text-foreground">{pageTitle}</span>
         </div>
@@ -145,7 +151,7 @@ export function Header() {
         </div>
 
         {!isAdmin(normalizeRoles(user?.roles)) && (
-          <Button variant="outline" size="sm" onClick={() => router.push('/my-exams')}>My Exams</Button>
+          <Button variant="outline" size="sm" onClick={() => router.push('/my-exams')}>Student Portal</Button>
         )}
         <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={handleLogout} title="Logout">
           <LogOut className="h-[18px] w-[18px]" />
