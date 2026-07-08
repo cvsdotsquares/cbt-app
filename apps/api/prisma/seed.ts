@@ -30,6 +30,9 @@ async function syncUserRoles(userId: string, expectedRoleNames: Role[]) {
 async function main() {
   console.log('Seeding database...');
 
+  const seedDemoUsers =
+    process.env.SEED_DEMO_USERS === 'true' || process.env.NODE_ENV !== 'production';
+
   const tenant = await prisma.tenant.upsert({
     where: { slug: 'default' },
     update: {},
@@ -71,7 +74,12 @@ async function main() {
   const superAdminRole = await prisma.role.findUnique({ where: { name: Role.SUPER_ADMIN } });
   const candidateRole = await prisma.role.findUnique({ where: { name: Role.CANDIDATE } });
 
-  const admin = await prisma.user.upsert({
+  let admin = { id: '' };
+  let candidate = { id: '' };
+  let exam = { code: 'DEMO-2026', title: 'Demo Aptitude Test 2026' };
+
+  if (seedDemoUsers) {
+  const adminRecord = await prisma.user.upsert({
     where: { tenantId_email: { tenantId: tenant.id, email: 'admin@cbt-platform.com' } },
     update: { status: 'ACTIVE' },
     create: {
@@ -85,6 +93,7 @@ async function main() {
       userRoles: superAdminRole ? { create: { roleId: superAdminRole.id } } : undefined,
     },
   });
+  admin = adminRecord;
 
   await syncUserRoles(admin.id, [Role.SUPER_ADMIN]);
 
@@ -122,7 +131,7 @@ async function main() {
   });
   await syncUserRoles(teacherUser.id, [Role.TEACHER]);
 
-  const candidate = await prisma.candidate.upsert({
+  const candidateRecord = await prisma.candidate.upsert({
     where: { userId: candidateUser.id },
     update: {},
     create: {
@@ -133,6 +142,7 @@ async function main() {
       kycVerifiedAt: new Date(),
     },
   });
+  candidate = candidateRecord;
 
   let topic = await prisma.topic.findFirst({ where: { tenantId: tenant.id, name: 'General Aptitude' } });
   if (!topic) {
@@ -217,12 +227,12 @@ async function main() {
   const endTime = new Date();
   endTime.setDate(endTime.getDate() + 30);
 
-  let exam = await prisma.exam.findFirst({
+  let demoExam = await prisma.exam.findFirst({
     where: { tenantId: tenant.id, code: 'DEMO-2026' },
     include: { sections: true },
   });
-  if (!exam) {
-    exam = await prisma.exam.create({
+  if (!demoExam) {
+    demoExam = await prisma.exam.create({
       data: {
         tenantId: tenant.id,
         title: 'Demo Aptitude Test 2026',
@@ -256,10 +266,10 @@ async function main() {
       include: { sections: true },
     });
 
-    const sectionId = exam.sections[0].id;
+    const sectionId = demoExam.sections[0].id;
     await prisma.examQuestion.createMany({
       data: questionIds.map((questionId, i) => ({
-        examId: exam!.id,
+        examId: demoExam!.id,
         sectionId,
         questionId,
         orderIndex: i + 1,
@@ -267,18 +277,26 @@ async function main() {
     });
 
     await prisma.examRegistration.create({
-      data: { examId: exam.id, candidateId: candidate.id, status: 'REGISTERED' },
+      data: { examId: demoExam.id, candidateId: candidate.id, status: 'REGISTERED' },
     });
+  }
+  exam = demoExam;
   }
 
   await seedNcertCurriculum(prisma, tenant.id);
-  await seedDemoBatch(prisma, tenant.id, candidate.id);
+  if (seedDemoUsers && candidate.id) {
+    await seedDemoBatch(prisma, tenant.id, candidate.id);
+  }
 
   console.log('Seed completed successfully');
-  console.log('Admin: admin@cbt-platform.com / Admin@123');
-  console.log('Teacher: teacher@example.com / Teacher@123');
-  console.log('Student: candidate@example.com / Candidate@123');
-  console.log(`Demo exam: ${exam.code} (${exam.title})`);
+  if (seedDemoUsers) {
+    console.log('Admin: admin@cbt-platform.com / Admin@123');
+    console.log('Teacher: teacher@example.com / Teacher@123');
+    console.log('Student: candidate@example.com / Candidate@123');
+    console.log(`Demo exam: ${exam.code} (${exam.title})`);
+  } else {
+    console.log('Demo users skipped (set SEED_DEMO_USERS=true to create them)');
+  }
 }
 
 main()

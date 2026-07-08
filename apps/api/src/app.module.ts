@@ -2,6 +2,8 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard, ThrottlerStorage } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { validateEnv } from './config/env.validation';
+import { StorageModule } from './common/storage/storage.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { RedisThrottlerStorage } from './redis/redis-throttler.storage';
@@ -37,7 +39,9 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
       isGlobal: true,
       // apps/api/.env wins over monorepo root so API secrets (e.g. OPENAI_API_KEY) are not blanked
       envFilePath: ['.env', '../../.env'],
+      validate: validateEnv,
     }),
+    StorageModule,
     RedisModule,
     ThrottlerModule.forRootAsync({
       imports: [RedisModule],

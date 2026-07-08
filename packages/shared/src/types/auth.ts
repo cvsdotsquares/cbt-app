@@ -29,6 +29,8 @@ export interface AuthUser {
 export interface JwtPayload {
   sub: string;
   email: string;
+  firstName: string;
+  lastName: string;
   tenantId: string;
   roles: Role[];
   permissions: string[];

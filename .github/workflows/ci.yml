@@ -58,6 +58,13 @@ jobs:
       - run: pnpm --filter @cbt/api test
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/cbt_test
+          REDIS_URL: redis://localhost:6379
+          JWT_ACCESS_SECRET: test-access-secret-min-32-characters
+          JWT_REFRESH_SECRET: test-refresh-secret-min-32-characters
+      - run: pnpm --filter @cbt/api test:e2e
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/cbt_test
+          REDIS_URL: redis://localhost:6379
           JWT_ACCESS_SECRET: test-access-secret-min-32-characters
           JWT_REFRESH_SECRET: test-refresh-secret-min-32-characters
 

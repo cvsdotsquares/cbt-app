@@ -11,14 +11,11 @@ function isLocalDevHost(): boolean {
 }
 
 /**
- * Browser on Vercel uses same-origin `/api/v1` proxy (no CORS, retries on Render cold start).
- * Local dev talks to the API directly. SSR uses the Render base URL.
+ * Browser always uses same-origin `/api/v1` proxy (HttpOnly cookie auth, no CORS).
+ * SSR uses the configured API base URL.
  */
 function getApiUrl(): string {
   if (typeof window !== 'undefined') {
-    if (isLocalDevHost()) {
-      return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
-    }
     return '/api/v1';
   }
   return `${RENDER_API_BASE.replace(/\/$/, '')}/api/v1`;
@@ -71,20 +68,18 @@ export interface ApiOptions extends RequestInit {
 let refreshPromise: Promise<string | null> | null = null;
 
 async function refreshAccessToken(): Promise<string | null> {
-  const { refreshToken, updateTokens, logout } = useAuthStore.getState();
-  if (!refreshToken) return null;
-
   try {
-    const res = await fetch(`${getApiUrl()}/auth/refresh`, {
+    const res = await fetch('/api/auth/refresh', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': getAuthTenantId() },
-      body: JSON.stringify({ refreshToken }),
+      credentials: 'include',
     });
     const data = await res.json();
     if (!res.ok) throw new Error('Refresh failed');
-    const payload = data.data ?? data;
-    updateTokens(payload.accessToken, payload.refreshToken);
-    return payload.accessToken;
+    await useAuthStore.getState().updateTokens(data.accessToken, data.refreshToken);
+    if (data.user) {
+      useAuthStore.setState({ user: data.user, isAuthenticated: true });
+    }
+    return data.accessToken as string;
   } catch {
     useAuthStore.getState().logout().finally(() => {
       if (typeof window !== 'undefined') window.location.href = '/login';
@@ -238,8 +233,8 @@ export async function apiFetch<T>(endpoint: string, options: ApiOptions = {}): P
   const useColdStartRetry = typeof window !== 'undefined' && !isLocalDevHost();
 
   let response = useColdStartRetry
-    ? await fetchWithColdStartRetry(requestUrl, { ...fetchOptions, headers })
-    : await fetch(requestUrl, { ...fetchOptions, headers });
+    ? await fetchWithColdStartRetry(requestUrl, { ...fetchOptions, headers, credentials: 'include' })
+    : await fetch(requestUrl, { ...fetchOptions, headers, credentials: 'include' });
 
   if (response.status === 401 && !skipAuth && !endpoint.includes('/auth/refresh')) {
     if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
@@ -247,8 +242,8 @@ export async function apiFetch<T>(endpoint: string, options: ApiOptions = {}): P
     if (newToken) {
       headers['Authorization'] = `Bearer ${newToken}`;
       response = useColdStartRetry
-        ? await fetchWithColdStartRetry(requestUrl, { ...fetchOptions, headers })
-        : await fetch(requestUrl, { ...fetchOptions, headers });
+        ? await fetchWithColdStartRetry(requestUrl, { ...fetchOptions, headers, credentials: 'include' })
+        : await fetch(requestUrl, { ...fetchOptions, headers, credentials: 'include' });
     }
   }
 
@@ -502,8 +497,8 @@ export const resultsApi = {
     };
     const useRetry = typeof window !== 'undefined' && !isLocalDevHost();
     const res = useRetry
-      ? await fetchWithColdStartRetry(url, { headers })
-      : await fetch(url, { headers });
+      ? await fetchWithColdStartRetry(url, { headers, credentials: 'include' })
+      : await fetch(url, { headers, credentials: 'include' });
     if (!res.ok) throw new Error('Export failed');
     return res.blob();
   },
@@ -654,8 +649,8 @@ export const materialsApi = {
     const useColdStartRetry = typeof window !== 'undefined' && !isLocalDevHost();
 
     let res = useColdStartRetry
-      ? await fetchWithColdStartRetry(requestUrl, { method: 'POST', headers, body: formData })
-      : await fetch(requestUrl, { method: 'POST', headers, body: formData });
+      ? await fetchWithColdStartRetry(requestUrl, { method: 'POST', headers, body: formData, credentials: 'include' })
+      : await fetch(requestUrl, { method: 'POST', headers, body: formData, credentials: 'include' });
 
     if (res.status === 401) {
       if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
@@ -663,8 +658,8 @@ export const materialsApi = {
       if (newToken) {
         headers.Authorization = `Bearer ${newToken}`;
         res = useColdStartRetry
-          ? await fetchWithColdStartRetry(requestUrl, { method: 'POST', headers, body: formData })
-          : await fetch(requestUrl, { method: 'POST', headers, body: formData });
+          ? await fetchWithColdStartRetry(requestUrl, { method: 'POST', headers, body: formData, credentials: 'include' })
+          : await fetch(requestUrl, { method: 'POST', headers, body: formData, credentials: 'include' });
       }
     }
 
@@ -690,6 +685,7 @@ export const materialsApi = {
         'X-Tenant-ID': getAuthTenantId(),
         'X-Device-Fingerprint': getFingerprint(),
       },
+      credentials: 'include',
     });
     if (!res.ok) {
       const raw = await res.text();
@@ -714,6 +710,7 @@ export const materialsApi = {
         'X-Tenant-ID': getAuthTenantId(),
         'X-Device-Fingerprint': getFingerprint(),
       },
+      credentials: 'include',
     });
     if (!res.ok) {
       const raw = await res.text();

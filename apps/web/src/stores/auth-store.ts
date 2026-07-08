@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AuthUser } from '@cbt/shared';
 import { normalizeRoles, isAdmin } from '@/lib/roles';
-import { syncAuthSession, clearAuthSession } from '@/lib/auth-session';
+import { syncAuthSession, clearAuthSession, hydrateAuthSession } from '@/lib/auth-session';
 
 interface AuthState {
   user: AuthUser | null;
@@ -12,7 +12,7 @@ interface AuthState {
   _hasHydrated: boolean;
   setHasHydrated: (value: boolean) => void;
   setAuth: (user: AuthUser, accessToken: string, refreshToken: string) => Promise<boolean>;
-  updateTokens: (accessToken: string, refreshToken: string) => void;
+  updateTokens: (accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -27,7 +27,7 @@ export const useAuthStore = create<AuthState>()(
       setHasHydrated: (value) => set({ _hasHydrated: value }),
       setAuth: async (user, accessToken, refreshToken) => {
         const roles = normalizeRoles(user.roles);
-        const isAdminUser = await syncAuthSession(accessToken);
+        const isAdminUser = await syncAuthSession(accessToken, refreshToken);
         set({
           user: { ...user, roles: roles as AuthUser['roles'] },
           accessToken,
@@ -36,8 +36,10 @@ export const useAuthStore = create<AuthState>()(
         });
         return isAdminUser;
       },
-      updateTokens: (accessToken, refreshToken) =>
-        set({ accessToken, refreshToken }),
+      updateTokens: async (accessToken, refreshToken) => {
+        await syncAuthSession(accessToken, refreshToken);
+        set({ accessToken, refreshToken });
+      },
       logout: async () => {
         await clearAuthSession();
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false });
@@ -45,10 +47,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'cbt-auth',
+      // Tokens live in HttpOnly cookies — only cache non-sensitive user display data.
       partialize: (state) => ({
         user: state.user,
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
     },
@@ -56,14 +57,29 @@ export const useAuthStore = create<AuthState>()(
 );
 
 export async function syncSessionFromStore() {
+  const hydrated = await hydrateAuthSession();
+  if (hydrated) {
+    useAuthStore.setState({
+      user: hydrated.user,
+      accessToken: hydrated.accessToken,
+      refreshToken: hydrated.refreshToken ?? null,
+      isAuthenticated: true,
+    });
+    return hydrated.isAdmin;
+  }
+
   const state = useAuthStore.getState();
-  if (state.isAuthenticated && state.accessToken) {
-    return syncAuthSession(state.accessToken);
+  if (state.isAuthenticated && state.accessToken && state.refreshToken) {
+    return syncAuthSession(state.accessToken, state.refreshToken);
   }
-  if (typeof document !== 'undefined' && document.cookie.includes('cbt-auth=1')) {
-    return false;
-  }
+
   await clearAuthSession();
+  useAuthStore.setState({
+    user: null,
+    accessToken: null,
+    refreshToken: null,
+    isAuthenticated: false,
+  });
   return false;
 }
 

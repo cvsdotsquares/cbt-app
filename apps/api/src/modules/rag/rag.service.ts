@@ -6,6 +6,7 @@ import { SyllabusExtractionService, ExtractedChapter } from './syllabus-extracti
 import { extractPdfText, type PdfExtractResult } from './pdf-text-extractor';
 import { looksLikeSingleChapterPdf, isUnreadablePdfText, isInvalidChapterTitle } from './ncert-text-utils';
 import { sanitizeTextForDb } from './text-sanitize';
+import { StorageService } from '../../common/storage/storage.service';
 
 export interface RetrievedChunk {
   id: string;
@@ -36,6 +37,7 @@ export class RagService {
     private config: ConfigService,
     private curriculumService: CurriculumService,
     private syllabusExtraction: SyllabusExtractionService,
+    private storage: StorageService,
   ) {}
 
   async embedText(text: string): Promise<number[]> {
@@ -197,15 +199,9 @@ export class RagService {
     });
 
     try {
-      const fs = await import('fs/promises');
-      const path = await import('path');
-      const filePath = path.isAbsolute(material.fileUrl)
-        ? material.fileUrl
-        : path.join(process.cwd(), material.fileUrl);
-
       let text = '';
       let pdfLayout: Awaited<ReturnType<typeof extractPdfText>> | undefined;
-      const buffer = await fs.readFile(filePath);
+      const buffer = await this.storage.readBuffer(material.fileUrl);
       const isPdf = material.mimeType === 'application/pdf'
         || material.fileName.toLowerCase().endsWith('.pdf');
 

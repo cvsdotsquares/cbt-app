@@ -2,28 +2,20 @@ import { Injectable, NotFoundException, Logger, BadRequestException } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RagService } from '../rag/rag.service';
+import { StorageService } from '../../common/storage/storage.service';
 import { MaterialType } from '@prisma/client';
-import * as fs from 'fs/promises';
-import { createReadStream } from 'fs';
-import * as path from 'path';
 import type { ReadStream } from 'fs';
 
 @Injectable()
 export class MaterialsService {
   private readonly logger = new Logger(MaterialsService.name);
-  private uploadDir: string;
 
   constructor(
     private prisma: PrismaService,
     private ragService: RagService,
     private config: ConfigService,
-  ) {
-    this.uploadDir = this.config.get<string>('UPLOAD_DIR')
-      || path.join(process.cwd(), 'uploads', 'materials');
-    fs.mkdir(this.uploadDir, { recursive: true }).catch((e) => {
-      this.logger.error(`Failed to create upload directory: ${e}`);
-    });
-  }
+    private storage: StorageService,
+  ) {}
 
   async findAll(
     tenantId: string,
@@ -76,18 +68,10 @@ export class MaterialsService {
     const material = await this.prisma.studyMaterial.findFirst({ where: { id, tenantId } });
     if (!material) throw new NotFoundException('Material not found');
 
-    const filePath = path.isAbsolute(material.fileUrl)
-      ? material.fileUrl
-      : path.resolve(process.cwd(), material.fileUrl);
-
-    try {
-      await fs.access(filePath);
-    } catch {
-      throw new NotFoundException('File not found on server. Try re-uploading.');
-    }
+    const stream = await this.storage.getReadStream(material.fileUrl);
 
     return {
-      stream: createReadStream(filePath),
+      stream,
       fileName: material.fileName,
       mimeType: material.mimeType || 'application/octet-stream',
       fileSize: material.fileSize,
@@ -175,16 +159,11 @@ export class MaterialsService {
           topicId: meta.topicId || null,
         };
 
-    const tenantDir = path.join(this.uploadDir, tenantId);
-    await fs.mkdir(tenantDir, { recursive: true });
-
-    const safeName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const filePath = path.join(tenantDir, safeName);
-    await fs.writeFile(filePath, file.buffer);
-
     const mimeType = file.mimetype === 'application/octet-stream' && file.originalname.endsWith('.pdf')
       ? 'application/pdf'
       : file.mimetype;
+
+    const fileUrl = await this.storage.save(tenantId, file.originalname, file.buffer, mimeType);
 
     const material = await this.prisma.studyMaterial.create({
       data: {
@@ -200,7 +179,7 @@ export class MaterialsService {
         academicSession: meta.academicSession || '2025-26',
         uploadedById: userId,
         fileName: file.originalname,
-        fileUrl: filePath,
+        fileUrl,
         fileSize: file.size,
         mimeType,
         status: 'PENDING',
@@ -236,7 +215,7 @@ export class MaterialsService {
     const material = await this.prisma.studyMaterial.findFirst({ where: { id, tenantId } });
     if (!material) throw new NotFoundException('Material not found');
     await this.prisma.studyMaterial.delete({ where: { id } });
-    try { await fs.unlink(material.fileUrl); } catch { /* ignore */ }
+    await this.storage.delete(material.fileUrl);
     return { deleted: true };
   }
 }

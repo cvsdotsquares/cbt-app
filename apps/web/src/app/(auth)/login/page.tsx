@@ -84,9 +84,9 @@ export default function LoginPage() {
         router.push('/mfa');
         return;
       }
-      if (result.accessToken && result.user) {
+      if (result.accessToken && result.refreshToken && result.user) {
         const roles = normalizeRoles(result.user.roles);
-        const isAdminUser = await setAuth({ ...result.user, roles } as never, result.accessToken, result.refreshToken || '');
+        const isAdminUser = await setAuth({ ...result.user, roles } as never, result.accessToken, result.refreshToken);
         router.replace(redirectTo ?? (isAdminUser ? '/dashboard' : '/my-exams'));
         return;
       }
@@ -237,10 +237,13 @@ export default function LoginPage() {
           <p className="text-center text-sm text-muted-foreground">
             <Link href="/forgot-password" className="font-semibold text-primary hover:underline">Forgot password?</Link>
           </p>
+          {(process.env.NEXT_PUBLIC_ALLOW_PUBLIC_REGISTRATION === 'true'
+            || process.env.NODE_ENV !== 'production') && (
           <p className="text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{' '}
             <Link href="/register" className="font-semibold text-primary hover:underline">Create account</Link>
           </p>
+          )}
         </div>
       </div>
     </div>

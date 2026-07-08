@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -92,7 +93,18 @@ export class AuthService {
     return { message: 'Password reset successful. Please log in with your new password.' };
   }
 
+  private isPublicRegistrationAllowed(): boolean {
+    const explicit = this.config.get<string>('ALLOW_PUBLIC_REGISTRATION');
+    if (explicit === 'true') return true;
+    if (explicit === 'false') return false;
+    return this.config.get('NODE_ENV') !== 'production';
+  }
+
   async register(dto: RegisterDto, ipAddress: string, userAgent: string) {
+    if (!this.isPublicRegistrationAllowed()) {
+      throw new ForbiddenException('Public registration is disabled');
+    }
+
     const tenant = await this.resolveTenant(dto.tenantId);
     if (!tenant) throw new BadRequestException('Invalid tenant');
 
@@ -352,6 +364,8 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
       tenantId: user.tenantId,
       roles,
       permissions: permissions as unknown as string[],

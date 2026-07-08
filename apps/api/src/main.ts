@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
@@ -9,7 +9,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const logger = new Logger('Bootstrap');
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+  });
 
   const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads', 'materials');
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -44,7 +47,8 @@ async function bootstrap() {
     }),
   );
 
-  if (process.env.NODE_ENV !== 'production') {
+  const isProd = process.env.NODE_ENV === 'production';
+  if (!isProd) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('CBT Platform API')
       .setDescription('Enterprise Computer Based Test Examination Management System')
@@ -57,10 +61,14 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document);
   }
 
+  app.enableShutdownHooks();
+
   const port = Number(process.env.PORT || process.env.API_PORT || 4000);
   await app.listen(port, '0.0.0.0');
-  console.log(`CBT API running on port ${port}`);
-  console.log(`Swagger docs: http://0.0.0.0:${port}/api/docs`);
+  logger.log(`CBT API running on port ${port}`);
+  if (!isProd) {
+    logger.log(`Swagger docs: http://0.0.0.0:${port}/api/docs`);
+  }
 }
 
 bootstrap().catch((err) => {

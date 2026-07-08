@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchWithColdStartRetry } from '@/lib/cold-start-retry';
+import { ACCESS_TOKEN_COOKIE } from '@/lib/auth-cookies';
 
-const API_BASE = (process.env.API_PROXY_URL || 'https://cbt-api-ktkr.onrender.com').replace(/\/$/, '');
+const API_BASE = (
+  process.env.API_PROXY_URL
+  || (process.env.NODE_ENV === 'production' ? 'https://cbt-api-ktkr.onrender.com' : 'http://localhost:4000')
+).replace(/\/$/, '');
 
 async function proxyRequest(req: NextRequest, pathSegments: string[]) {
   const path = pathSegments.join('/');
@@ -14,10 +18,16 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]) {
   req.headers.forEach((value, key) => {
     const lower = key.toLowerCase();
     if (lower === 'host' || lower === 'connection') return;
-    // Let fetch compute content-length for multipart/binary bodies
     if (lower === 'content-length' && isMultipart) return;
     headers.set(key, value);
   });
+
+  if (!headers.has('authorization')) {
+    const accessToken = req.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
+    if (accessToken) {
+      headers.set('authorization', `Bearer ${accessToken}`);
+    }
+  }
 
   let requestBody: BodyInit | undefined;
   if (req.method !== 'GET' && req.method !== 'HEAD') {
