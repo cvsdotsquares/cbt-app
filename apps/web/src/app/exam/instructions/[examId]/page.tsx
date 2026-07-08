@@ -62,18 +62,18 @@ export default function ExamInstructionsPage() {
   return (
     <div className="min-h-screen mesh-bg">
       <header className="border-b bg-card/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4">
           <Logo />
-          <Button variant="ghost" size="sm" onClick={() => router.push('/my-exams')}>
+          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => router.push('/my-exams')}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl space-y-6 p-6 py-10">
+      <main className="mx-auto max-w-3xl space-y-5 p-4 py-6 sm:space-y-6 sm:p-6 sm:py-10">
         <div className="space-y-2 text-center">
           <Badge variant="secondary" className="mb-2">{exam.code}</Badge>
-          <h1 className="text-3xl font-bold tracking-tight">{exam.title}</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{exam.title}</h1>
           <p className="text-muted-foreground">NCERT class test — read all instructions before you begin</p>
           <Badge variant={status.variant}>{status.label}</Badge>
         </div>
@@ -100,17 +100,17 @@ export default function ExamInstructionsPage() {
           </Card>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
           {[
             { label: 'Duration', value: `${settings.durationMinutes} min`, icon: Clock },
             { label: 'Pass Score', value: `${settings.passingScore}%`, icon: CheckCircle2 },
             { label: 'Negative', value: settings.negativeMarking ? 'Yes' : 'No', icon: AlertTriangle },
           ].map((s) => (
             <Card key={s.label} className="surface-card text-center">
-              <CardContent className="p-5">
-                <s.icon className="mx-auto mb-2 h-5 w-5 text-primary" />
-                <p className="text-2xl font-bold">{s.value}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
+              <CardContent className="p-3 sm:p-5">
+                <s.icon className="mx-auto mb-2 h-4 w-4 text-primary sm:h-5 sm:w-5" />
+                <p className="text-xl font-bold sm:text-2xl">{s.value}</p>
+                <p className="text-[11px] text-muted-foreground sm:text-xs">{s.label}</p>
               </CardContent>
             </Card>
           ))}

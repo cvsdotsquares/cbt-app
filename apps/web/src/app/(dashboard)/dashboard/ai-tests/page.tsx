@@ -162,7 +162,7 @@ export default function AiTestsPage() {
         badge="NCERT · AI"
       />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,320px)]">
         {/* Main form */}
         <div className="space-y-6">
           <Card className="surface-card overflow-hidden border-primary/10">

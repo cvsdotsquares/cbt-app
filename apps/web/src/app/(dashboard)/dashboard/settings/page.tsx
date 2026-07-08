@@ -133,20 +133,20 @@ export default function SettingsPage() {
       </div>
 
       {/* Quick stats */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         {[
           { icon: Building2, label: 'Organization', value: tenant?.name || user?.tenantId || '—', accent: 'bg-blue-500/10 text-blue-600' },
           { icon: Shield, label: 'Assigned Roles', value: String(roleCount), accent: 'bg-violet-500/10 text-violet-600' },
           { icon: Settings, label: 'Tenant ID', value: user?.tenantId?.slice(0, 8) + '…' || '—', accent: 'bg-amber-500/10 text-amber-600' },
         ].map((stat) => (
           <Card key={stat.label} className="surface-card">
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${stat.accent}`}>
-                <stat.icon className="h-5 w-5" />
+            <CardContent className="flex items-center gap-3 p-3 sm:gap-4 sm:p-5">
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11 ${stat.accent}`}>
+                <stat.icon className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
-                <p className="truncate text-lg font-bold">{tenantLoading && stat.label === 'Organization' ? '…' : stat.value}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:text-[11px]">{stat.label}</p>
+                <p className="truncate text-base font-bold sm:text-lg">{tenantLoading && stat.label === 'Organization' ? '…' : stat.value}</p>
               </div>
             </CardContent>
           </Card>

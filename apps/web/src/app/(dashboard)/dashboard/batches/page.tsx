@@ -390,7 +390,7 @@ export default function BatchesPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             {[
               { label: 'Batches', value: batches?.length ?? 0, icon: School, tone: 'bg-blue-500/10 text-blue-600' },
               { label: 'Students', value: totalStudents, icon: Users, tone: 'bg-emerald-500/10 text-emerald-600' },
@@ -416,7 +416,7 @@ export default function BatchesPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(300px,360px)_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(260px,360px)_1fr]">
         {/* Batch list */}
         <Card className="surface-card h-fit overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-primary via-violet-500 to-indigo-400" />

@@ -5,21 +5,21 @@ export function Logo({ className, variant = 'default' }: { className?: string; v
   const isLight = variant === 'light';
 
   return (
-    <div className={cn('flex items-center gap-3', className)}>
+    <div className={cn('flex min-w-0 items-center gap-2.5 sm:gap-3', className)}>
       <div className={cn(
-        'relative flex h-10 w-10 items-center justify-center rounded-xl',
+        'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10',
         isLight
           ? 'bg-white/10 text-white shadow-inner-glow backdrop-blur-sm'
           : 'gradient-primary text-white shadow-glow',
       )}>
-        <GraduationCap className="h-5 w-5" />
+        <GraduationCap className="h-4 w-4 sm:h-5 sm:w-5" />
         {!isLight && (
           <div className="absolute inset-0 rounded-xl bg-white/20 opacity-0 transition-opacity hover:opacity-100" />
         )}
       </div>
-      <div>
+      <div className="min-w-0">
         <p className={cn(
-          'text-[15px] font-bold leading-none tracking-tight',
+          'truncate text-sm font-bold leading-none tracking-tight sm:text-[15px]',
           isLight ? 'text-white' : 'text-foreground',
         )}>
           NCERT Institute

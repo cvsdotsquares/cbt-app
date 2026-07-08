@@ -12,7 +12,7 @@ import { Permission } from '@cbt/shared';
 import { Logo } from './logo';
 
 /** NCERT institute workflow — books → classes → syllabus → tests → students → results */
-const mainNav = [
+export const mainNav = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard, permission: Permission.ANALYTICS_VIEW, exact: true },
   { href: '/dashboard/materials', label: 'NCERT Books', icon: Upload, permission: Permission.MATERIAL_READ },
   { href: '/dashboard/batches', label: 'Classes & Batches', icon: School, permission: Permission.BATCH_READ },
@@ -23,16 +23,21 @@ const mainNav = [
   { href: '/dashboard/results', label: 'Results', icon: Award, permission: Permission.RESULT_READ },
 ];
 
-const settingsNav = [
+export const settingsNav = [
   { href: '/dashboard/users', label: 'Staff & Teachers', icon: UserCog, permission: Permission.USER_READ },
   { href: '/dashboard/settings', label: 'Institute Settings', icon: Settings, permission: Permission.TENANT_READ },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  className?: string;
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const { can } = usePermissions();
 
-  const renderLink = (item: typeof mainNav[0]) => {
+  const renderLink = (item: (typeof mainNav)[0]) => {
     const Icon = item.icon;
     const isActive = item.exact
       ? pathname === item.href
@@ -41,6 +46,7 @@ export function Sidebar() {
       <Link
         key={item.href}
         href={item.href}
+        onClick={onNavigate}
         className={cn(
           'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200',
           isActive
@@ -61,14 +67,19 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="relative flex h-full w-[260px] flex-col bg-sidebar text-sidebar-foreground shadow-sidebar">
+    <aside
+      className={cn(
+        'relative flex h-full w-[min(260px,85vw)] flex-col bg-sidebar text-sidebar-foreground shadow-sidebar',
+        className,
+      )}
+    >
       <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-sidebar-border to-transparent" />
 
-      <div className="flex h-[72px] items-center border-b border-sidebar-border px-6">
+      <div className="flex h-[64px] items-center border-b border-sidebar-border px-5 sm:h-[72px] sm:px-6">
         <Logo variant="light" />
       </div>
 
-      <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-6">
+      <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-5 sm:py-6">
         <div className="space-y-1">
           {mainNav.filter((i) => can(i.permission)).map(renderLink)}
         </div>

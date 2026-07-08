@@ -96,7 +96,7 @@ export function CreateCandidateDialog({ accessToken, batches = [], classes = [] 
           <DialogDescription>Register a new student and optionally assign a class batch.</DialogDescription>
         </DialogHeader>
         <div key={formKey} className="grid gap-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div><Label>First name</Label><Input autoComplete="off" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
             <div><Label>Last name</Label><Input autoComplete="off" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
           </div>

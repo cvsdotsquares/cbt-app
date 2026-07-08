@@ -41,11 +41,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!isAuthenticated || !user || !staffUser) return null;
 
   return (
-    <div className="flex h-screen mesh-bg">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex h-dvh mesh-bg">
+      <div className="hidden lg:block">
+        <Sidebar />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8">
           <div className="page-shell">{children}</div>
         </main>
         <AiAssistant />

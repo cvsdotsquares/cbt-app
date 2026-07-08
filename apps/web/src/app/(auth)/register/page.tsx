@@ -41,8 +41,8 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center mesh-bg p-6">
-      <div className="w-full max-w-md space-y-8">
+    <div className="flex min-h-screen items-center justify-center mesh-bg p-4 sm:p-6">
+      <div className="w-full max-w-md space-y-6 sm:space-y-8">
         <div className="flex justify-center"><Logo /></div>
 
         <div className="space-y-2 text-center">
@@ -50,11 +50,11 @@ export default function RegisterPage() {
           <p className="text-muted-foreground">Register as a candidate to access examinations</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5 rounded-xl border bg-card p-8 shadow-card">
+        <form onSubmit={handleSubmit} className="space-y-5 rounded-xl border bg-card p-5 shadow-card sm:p-8">
           {error && (
             <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
           )}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>First name</Label>
               <Input placeholder="John" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />

@@ -40,14 +40,14 @@ export function StatCard({ title, value, icon: Icon, accent = 'blue', trend, tre
   return (
     <Card className="group surface-card relative overflow-hidden">
       <div className={cn('absolute inset-x-0 top-0 h-1 bg-gradient-to-r opacity-80', style.bar)} />
-      <CardContent className="p-5 pt-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2.5">
-            <p className="text-[13px] font-medium text-muted-foreground">{title}</p>
-            <p className="text-3xl font-bold tracking-tight tabular-nums">{value}</p>
+      <CardContent className="p-3 pt-4 sm:p-5 sm:pt-6">
+        <div className="flex items-start justify-between gap-2 sm:gap-4">
+          <div className="min-w-0 space-y-1.5 sm:space-y-2.5">
+            <p className="truncate text-[11px] font-medium text-muted-foreground sm:text-[13px]">{title}</p>
+            <p className="text-2xl font-bold tracking-tight tabular-nums sm:text-3xl">{value}</p>
             {trend && (
               <p className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                'inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 text-[10px] font-semibold sm:text-[11px]',
                 trendUp ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground',
               )}>
                 {trendUp && <span className="text-emerald-500">↑</span>}
@@ -56,10 +56,10 @@ export function StatCard({ title, value, icon: Icon, accent = 'blue', trend, tre
             )}
           </div>
           <div className={cn(
-            'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-105',
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105 sm:h-12 sm:w-12 sm:rounded-2xl',
             style.icon,
           )}>
-            <Icon className="h-5 w-5" />
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </div>
       </CardContent>

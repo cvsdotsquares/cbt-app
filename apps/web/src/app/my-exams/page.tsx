@@ -177,13 +177,13 @@ export default function MyExamsPage() {
   return (
     <div className="min-h-screen mesh-bg">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-card/60 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4">
           <Logo />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-            <div className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/30 py-1.5 pl-1.5 pr-3">
+            <div className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/30 py-1.5 pl-1.5 pr-2 sm:pr-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-primary text-xs font-bold text-white">
                 {initials}
               </div>
@@ -194,24 +194,24 @@ export default function MyExamsPage() {
                 )}
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={async () => {
+            <Button variant="ghost" size="sm" className="px-2 sm:px-3" onClick={async () => {
               const token = useAuthStore.getState().accessToken;
               if (token) await authApi.logout(token).catch(() => {});
               await logout();
               window.location.href = '/login';
             }}>
-              <LogOut className="mr-2 h-4 w-4" /> Logout
+              <LogOut className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Logout</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-8 px-6 py-10 animate-fade-in">
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 animate-fade-in sm:space-y-8 sm:px-6 sm:py-10">
         <div className="hero-banner">
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-2">
               <p className="text-sm font-semibold text-primary">Good {greeting}, {user?.firstName}</p>
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Student Portal</h1>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">Student Portal</h1>
               {learning?.batches?.length ? (
                 <p className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-sm font-medium text-primary">
                   <BookOpen className="h-3.5 w-3.5" />
@@ -240,7 +240,7 @@ export default function MyExamsPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <StatCard title="Class Tests" value={stats?.totalExams ?? examList.length} icon={FileText} accent="blue" />
           <StatCard
             title="In Progress"
@@ -461,7 +461,7 @@ export default function MyExamsPage() {
                   </Card>
                 ) : null}
 
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <StatCard title="Mastered Topics" value={learning?.stats?.masteredTopics ?? 0} icon={CheckCircle2} accent="green" />
                   <StatCard title="Weak Areas" value={learning?.stats?.weakTopics ?? 0} icon={AlertCircle} accent="amber" />
                   <StatCard

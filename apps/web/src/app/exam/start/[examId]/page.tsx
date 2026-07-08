@@ -291,59 +291,92 @@ export default function ExamStartPage() {
         </div>
       )}
 
-      <header className="flex items-center justify-between border-b bg-card px-6 py-3">
-        <div>
-          <p className="font-semibold">Question {currentIndex + 1} of {session.questions.length}</p>
-          <p className="text-sm text-muted-foreground">
-            {question?.type} · Marks: {question?.marks ?? 2} · Answered: {answeredCount}/{session.questions.length}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {examSocket.connected ? (
-            <Badge variant="outline" className="gap-1 text-emerald-600"><Wifi className="h-3 w-3" /> Live</Badge>
-          ) : (
-            <Badge variant="outline" className="gap-1 text-muted-foreground"><WifiOff className="h-3 w-3" /> REST</Badge>
-          )}
-          {saveStatus === 'saving' && (
-            <Badge variant="secondary" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Saving</Badge>
-          )}
-          {saveStatus === 'saved' && (
-            <Badge variant="success" className="gap-1"><Check className="h-3 w-3" /> Saved</Badge>
-          )}
-          {saveStatus === 'error' && (
-            <Badge variant="destructive" className="gap-1">Save failed</Badge>
-          )}
-          {violations > 0 && (
-            <Badge variant="destructive" className="gap-1">
-              <AlertTriangle className="h-3 w-3" /> {violations} violations
+      <header className="sticky top-0 z-30 border-b bg-card/95 px-3 py-2.5 backdrop-blur sm:px-6 sm:py-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-sm sm:text-base">
+              Question {currentIndex + 1} of {session.questions.length}
+            </p>
+            <p className="truncate text-xs text-muted-foreground sm:text-sm">
+              {question?.type} · Marks: {question?.marks ?? 2} · Answered: {answeredCount}/{session.questions.length}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            {examSocket.connected ? (
+              <Badge variant="outline" className="hidden gap-1 text-emerald-600 sm:inline-flex"><Wifi className="h-3 w-3" /> Live</Badge>
+            ) : (
+              <Badge variant="outline" className="hidden gap-1 text-muted-foreground sm:inline-flex"><WifiOff className="h-3 w-3" /> REST</Badge>
+            )}
+            {saveStatus === 'saving' && (
+              <Badge variant="secondary" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Saving</Badge>
+            )}
+            {saveStatus === 'saved' && (
+              <Badge variant="success" className="hidden gap-1 sm:inline-flex"><Check className="h-3 w-3" /> Saved</Badge>
+            )}
+            {saveStatus === 'error' && (
+              <Badge variant="destructive" className="gap-1">Save failed</Badge>
+            )}
+            {violations > 0 && (
+              <Badge variant="destructive" className="gap-1">
+                <AlertTriangle className="h-3 w-3" /> {violations}
+              </Badge>
+            )}
+            <Badge variant="secondary" className="hidden gap-1 sm:inline-flex"><Shield className="h-3 w-3" /> Secured</Badge>
+            <Badge variant={timeLeft < 300 ? 'destructive' : 'secondary'} className="font-mono tabular-nums">
+              {formatTime(timeLeft)}
             </Badge>
-          )}
-          <Badge variant="secondary" className="gap-1"><Shield className="h-3 w-3" /> Secured</Badge>
-          <Badge variant={timeLeft < 300 ? 'destructive' : 'secondary'}>{formatTime(timeLeft)}</Badge>
-          <Button variant="destructive" onClick={() => setShowSubmitDialog(true)} disabled={submitting}>Submit Exam</Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="sm:h-10 sm:px-4 sm:text-sm"
+              onClick={() => setShowSubmitDialog(true)}
+              disabled={submitting}
+            >
+              Submit
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl p-6">
+      <main className="mx-auto max-w-3xl p-3 pb-24 sm:p-6 sm:pb-6">
         {question && (
           <Card>
-            <CardContent className="space-y-6 p-6">
-              <h2 className="text-lg font-medium">{question.content?.text || question.title}</h2>
+            <CardContent className="space-y-6 p-4 sm:p-6">
+              <h2 className="text-base font-medium leading-relaxed sm:text-lg">{question.content?.text || question.title}</h2>
               <QuestionInput
                 question={question}
                 answer={answers[question.id]}
                 onSave={(value) => saveAnswer(question.id, value)}
               />
-              <div className="flex items-center justify-between pt-4">
-                <Button variant="outline" disabled={currentIndex === 0} onClick={() => setCurrentIndex((i) => i - 1)}>Previous</Button>
-                <Button variant="ghost" onClick={() => {
-                  const marked = !review[question.id];
-                  setReview((r) => ({ ...r, [question.id]: marked }));
-                  if (accessToken) examSessionApi.markReview(accessToken, session.sessionId, question.id, marked);
-                }}>
+              <div className="flex flex-col gap-2 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 sm:flex-none"
+                    disabled={currentIndex === 0}
+                    onClick={() => setCurrentIndex((i) => i - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    className="flex-1 sm:flex-none"
+                    disabled={currentIndex === session.questions.length - 1}
+                    onClick={() => setCurrentIndex((i) => i + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+                <Button
+                  variant="ghost"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    const marked = !review[question.id];
+                    setReview((r) => ({ ...r, [question.id]: marked }));
+                    if (accessToken) examSessionApi.markReview(accessToken, session.sessionId, question.id, marked);
+                  }}
+                >
                   {review[question.id] ? '✓ Marked for Review' : 'Mark for Review'}
                 </Button>
-                <Button disabled={currentIndex === session.questions.length - 1} onClick={() => setCurrentIndex((i) => i + 1)}>Next</Button>
               </div>
             </CardContent>
           </Card>

@@ -49,14 +49,14 @@ export function AiAssistant() {
     <>
       <Button
         onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-2xl shadow-glow transition-transform hover:scale-105"
+        className="fixed bottom-4 right-4 z-50 h-12 w-12 rounded-2xl shadow-glow transition-transform hover:scale-105 sm:bottom-6 sm:right-6 sm:h-14 sm:w-14"
         size="icon"
       >
         {open ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
       </Button>
 
       {open && (
-        <Card className="fixed bottom-24 right-6 z-50 flex h-[440px] w-[380px] flex-col overflow-hidden border-border/60 shadow-card-hover animate-fade-in-up">
+        <Card className="fixed inset-x-3 bottom-20 z-50 flex h-[min(440px,calc(100dvh-7rem))] w-auto flex-col overflow-hidden border-border/60 shadow-card-hover animate-fade-in-up sm:inset-x-auto sm:bottom-24 sm:right-6 sm:h-[440px] sm:w-[min(380px,calc(100vw-3rem))]">
           <div className="flex items-center gap-3 border-b border-white/10 gradient-primary px-5 py-4 text-white">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
               <Bot className="h-5 w-5" />

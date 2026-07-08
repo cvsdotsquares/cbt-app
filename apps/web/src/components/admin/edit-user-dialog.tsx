@@ -75,7 +75,7 @@ export function EditUserDialog({ accessToken, user, open, onOpenChange }: EditUs
           <DialogDescription>Update profile details, status, or reset password.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label>First name</Label>
               <Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />

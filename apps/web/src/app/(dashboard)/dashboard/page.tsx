@@ -222,7 +222,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-8">
         <div className="h-36 animate-pulse rounded-2xl bg-muted" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
           ))}
@@ -317,7 +317,7 @@ export default function DashboardPage() {
       </section>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {can(Permission.CANDIDATE_READ) && (
           <StatCard title="Students" value={stats?.totalCandidates ?? 0} icon={GraduationCap} accent="green" />
         )}

@@ -32,7 +32,7 @@ export function PageHeader({ title, highlight, description, children, className,
               {badge}
             </span>
           )}
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">
             {prefix ? <>{prefix}{' '}</> : null}
             <span className="gradient-text">{accent}</span>
           </h1>

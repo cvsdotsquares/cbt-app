@@ -165,19 +165,19 @@ export default function LoginPage() {
       </div>
 
       {/* Login form */}
-      <div className="relative flex flex-1 items-center justify-center mesh-bg p-6 sm:p-10">
+      <div className="relative flex flex-1 items-center justify-center mesh-bg p-4 sm:p-6 md:p-10">
         <div className="absolute inset-0 grid-pattern opacity-30" />
-        <div className="relative w-full max-w-[420px] space-y-8 animate-fade-in-up">
+        <div className="relative w-full max-w-[420px] space-y-6 animate-fade-in-up sm:space-y-8">
           <div className="lg:hidden">
             <Logo />
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-[28px] font-bold tracking-tight">Welcome back</h2>
+            <h2 className="text-2xl font-bold tracking-tight sm:text-[28px]">Welcome back</h2>
             <p className="text-muted-foreground">Sign in to your institute account</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="glass-panel space-y-5 p-8">
+          <form onSubmit={handleSubmit} className="glass-panel space-y-5 p-5 sm:p-8">
             {error && (
               <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive">
                 {error}

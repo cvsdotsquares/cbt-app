@@ -135,7 +135,7 @@ type LiveMonitoringData = {
 
       {examId && live && (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
             <StatCard title="Active Sessions" value={live.activeCount} icon={Activity} accent="blue" trend="Real-time" trendUp />
             <StatCard title="High Risk" value={highRisk} icon={AlertTriangle} accent="red" />
             <StatCard title="Connection" value="Live" icon={Radio} accent="green" trend="WebSocket + REST" trendUp />

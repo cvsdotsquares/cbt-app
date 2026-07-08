@@ -135,7 +135,7 @@ export default function SyllabusPage() {
         </Button>
       </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard title="Classes covered" value={totals.classes} icon={GraduationCap} accent="blue" />
         <StatCard title="Subjects" value={totals.subjects} icon={Library} accent="violet" />
         <StatCard title="Chapters" value={totals.chapters} icon={BookOpen} accent="green" />

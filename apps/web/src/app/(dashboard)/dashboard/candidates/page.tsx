@@ -170,7 +170,7 @@ export default function CandidatesPage() {
         )}
       </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         <StatCard title="Total Students" value={kycStats?.total ?? data?.total ?? 0} icon={Users} accent="blue" />
         <StatCard title="KYC Verified" value={kycStats?.verified ?? 0} icon={CheckCircle2} accent="green" />
         <StatCard
@@ -182,8 +182,8 @@ export default function CandidatesPage() {
         />
       </div>
       
-      <div className="flex flex-wrap items-center gap-2 w-full">
-          <div className="relative w-96">
+      <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative w-full sm:max-w-sm sm:flex-1">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search students…"
@@ -193,7 +193,7 @@ export default function CandidatesPage() {
             />
           </div>
           <select
-            className="h-10 w-80 rounded-md border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm sm:w-auto sm:min-w-[12rem] sm:max-w-xs sm:flex-1"
             value={classFilter}
             onChange={(e) => {
               setClassFilter(e.target.value);
@@ -208,7 +208,7 @@ export default function CandidatesPage() {
             ))}
           </select>
           <select
-            className="h-10 w-80 rounded-md border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm sm:w-auto sm:min-w-[12rem] sm:max-w-xs sm:flex-1"
             value={batchFilter}
             disabled={showUnassigned}
             onChange={(e) => { setBatchFilter(e.target.value); setPage(1); }}

@@ -160,7 +160,7 @@ export default function QuestionsPage() {
             <CardTitle className="text-base font-bold">New Question</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5 pt-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2"><Label>Title</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
               <div className="space-y-2"><Label>Type</Label>
                 <select className="form-select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
@@ -170,7 +170,7 @@ export default function QuestionsPage() {
               </div>
             </div>
             <div className="space-y-2"><Label>Question Text</Label><Textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {(['A', 'B', 'C', 'D'] as const).map((l) => (
                 <div key={l} className="space-y-2"><Label>Option {l}</Label><Input value={form[`option${l}` as keyof typeof form] as string} onChange={(e) => setForm({ ...form, [`option${l}`]: e.target.value })} /></div>
               ))}

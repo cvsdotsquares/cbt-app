@@ -61,7 +61,7 @@ export default function TeacherPage() {
         <TableSkeleton rows={4} />
       ) : analytics ? (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
             <StatCard title="Students" value={analytics.studentCount} icon={Users} />
             <StatCard title="Batch Average" value={`${analytics.batchAverage.toFixed(1)}%`} icon={BarChart3} />
             <StatCard title="Weak Topics" value={analytics.weakTopics.length} icon={TrendingDown} />

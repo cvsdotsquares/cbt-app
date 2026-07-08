@@ -144,7 +144,7 @@ export default function ResultsPage() {
           badge="NCERT · Classes 9–12"
         />
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
           <StatCard title="Class tests" value={classTests.length} icon={FileSpreadsheet} accent="blue" />
           <StatCard
             title="With submissions"
@@ -292,7 +292,7 @@ export default function ResultsPage() {
         )}
       </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard title="Students scored" value={resultItems.length} icon={Users} accent="blue" />
         <StatCard
           title="Average %"

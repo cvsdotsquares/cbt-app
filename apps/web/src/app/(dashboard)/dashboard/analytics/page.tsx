@@ -50,7 +50,7 @@ export default function AnalyticsPage() {
       </PageHeader>
 
       {analytics ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
           <StatCard title="Registered" value={analytics.registered} icon={Users} accent="blue" />
           <StatCard title="Submitted" value={analytics.submitted} icon={CheckCircle2} accent="green" />
           <StatCard title="Violations" value={analytics.violations} icon={AlertTriangle} accent="red" />

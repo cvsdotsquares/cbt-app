@@ -23,7 +23,7 @@ export function DataTableHeader({ children }: { children: React.ReactNode }) {
 
 export function DataTableHead({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className={cn('px-5 py-4 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground', className)}>
+    <th className={cn('whitespace-nowrap px-3 py-3 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground sm:px-5 sm:py-4', className)}>
       {children}
     </th>
   );
@@ -38,7 +38,7 @@ export function DataTableRow({ children, className }: { children: React.ReactNod
 }
 
 export function DataTableCell({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <td className={cn('px-5 py-4 text-sm', className)}>{children}</td>;
+  return <td className={cn('px-3 py-3 text-sm sm:px-5 sm:py-4', className)}>{children}</td>;
 }
 
 export function EmptyState({ icon: Icon, title, description }: { icon: React.ComponentType<{ className?: string }>; title: string; description?: string }) {

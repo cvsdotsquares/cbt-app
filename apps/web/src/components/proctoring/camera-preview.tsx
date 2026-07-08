@@ -17,7 +17,7 @@ export function CameraPreview({ videoRef, canvasRef, active, error, riskScore, f
   return (
     <>
     <canvas ref={canvasRef} className="hidden" />
-    <div className="fixed bottom-4 right-4 z-50 w-48 overflow-hidden rounded-xl border-2 border-primary/30 bg-card shadow-card-hover">
+    <div className="fixed bottom-4 left-4 z-40 w-28 overflow-hidden rounded-xl border-2 border-primary/30 bg-card shadow-card-hover sm:left-auto sm:right-4 sm:w-40 md:w-48">
       <div className="relative aspect-[4/3] bg-black">
         <video ref={videoRef} className="h-full w-full object-cover mirror" muted playsInline style={{ transform: 'scaleX(-1)' }} />
         {!active && (
