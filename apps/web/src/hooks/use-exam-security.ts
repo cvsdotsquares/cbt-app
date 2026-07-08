@@ -3,11 +3,16 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { proctoringApi } from '@/lib/api';
 import type { ExamSecurityPolicy } from '@cbt/shared';
+import {
+  isFullscreenActive,
+  normalizeSecurityPolicy,
+  requestDocumentFullscreen,
+} from '@/lib/exam-security-policy';
 
 interface UseExamSecurityOptions {
   sessionId: string;
   accessToken: string;
-  policy?: Partial<ExamSecurityPolicy>;
+  policy?: Partial<ExamSecurityPolicy> & { fullscreenRequired?: boolean };
   candidateLabel?: string;
   enabled?: boolean;
 }
@@ -19,8 +24,10 @@ export function useExamSecurity({
   candidateLabel = '',
   enabled = true,
 }: UseExamSecurityOptions) {
+  const normalizedPolicy = normalizeSecurityPolicy(policy);
+  const fullscreenRequired = normalizedPolicy.fullscreen !== false;
   const [violations, setViolations] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(() => !fullscreenRequired);
   const reportedRef = useRef(new Set<string>());
 
   const report = useCallback(async (
@@ -39,27 +46,27 @@ export function useExamSecurity({
   }, [accessToken, sessionId]);
 
   const enterFullscreen = useCallback(async () => {
-    if (!policy.fullscreen) return true;
-    if (document.fullscreenElement) {
+    if (!fullscreenRequired) {
       setIsFullscreen(true);
       return true;
     }
-    try {
-      const el = document.documentElement;
-      const request = el.requestFullscreen
-        ?? (el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen;
-      if (!request) return false;
-      await request.call(el);
+    if (isFullscreenActive()) {
       setIsFullscreen(true);
       return true;
-    } catch {
-      return false;
     }
-  }, [policy.fullscreen]);
+    const ok = await requestDocumentFullscreen();
+    setIsFullscreen(ok || isFullscreenActive());
+    return ok || isFullscreenActive();
+  }, [fullscreenRequired]);
 
   useEffect(() => {
-    setIsFullscreen(!!document.fullscreenElement);
-  }, []);
+    if (!enabled) return;
+    if (!fullscreenRequired) {
+      setIsFullscreen(true);
+      return;
+    }
+    setIsFullscreen(isFullscreenActive());
+  }, [enabled, fullscreenRequired]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -73,41 +80,41 @@ export function useExamSecurity({
     const onBlur = () => report('WINDOW_BLUR', 'MEDIUM', { action: 'window_blur' });
 
     const onCopy = (e: ClipboardEvent) => {
-      if (policy.blockCopyPaste) {
+      if (normalizedPolicy.blockCopyPaste) {
         e.preventDefault();
         report('COPY_ATTEMPT', 'MEDIUM');
       }
     };
 
     const onPaste = (e: ClipboardEvent) => {
-      if (policy.blockCopyPaste) {
+      if (normalizedPolicy.blockCopyPaste) {
         e.preventDefault();
         report('PASTE_ATTEMPT', 'MEDIUM');
       }
     };
 
     const onContextMenu = (e: MouseEvent) => {
-      if (policy.blockRightClick) {
+      if (normalizedPolicy.blockRightClick) {
         e.preventDefault();
         report('RIGHT_CLICK', 'LOW');
       }
     };
 
     const onFullscreenChange = () => {
-      const fs = !!document.fullscreenElement;
-      setIsFullscreen(fs);
-      if (!fs && policy.fullscreen) {
+      const fs = isFullscreenActive();
+      setIsFullscreen(fullscreenRequired ? fs : true);
+      if (!fs && fullscreenRequired) {
         report('FULLSCREEN_EXIT', 'HIGH');
       }
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (policy.blockCopyPaste && (e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a'].includes(e.key.toLowerCase())) {
+      if (normalizedPolicy.blockCopyPaste && (e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a'].includes(e.key.toLowerCase())) {
         e.preventDefault();
         report('COPY_ATTEMPT', 'MEDIUM', { key: e.key });
       }
       if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) {
-        if (policy.detectDevTools) report('DEVTOOLS', 'HIGH');
+        if (normalizedPolicy.detectDevTools) report('DEVTOOLS', 'HIGH');
       }
     };
 
@@ -117,6 +124,7 @@ export function useExamSecurity({
     document.addEventListener('paste', onPaste);
     document.addEventListener('contextmenu', onContextMenu);
     document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
     document.addEventListener('keydown', onKeyDown);
 
     return () => {
@@ -126,11 +134,12 @@ export function useExamSecurity({
       document.removeEventListener('paste', onPaste);
       document.removeEventListener('contextmenu', onContextMenu);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [enabled, policy, report]);
+  }, [enabled, normalizedPolicy, fullscreenRequired, report]);
 
-  const watermarkEnabled = policy.watermark?.enabled ?? false;
+  const watermarkEnabled = normalizedPolicy.watermark?.enabled ?? false;
 
   return { violations, isFullscreen, enterFullscreen, watermarkEnabled, candidateLabel };
 }

@@ -81,4 +81,18 @@ export enum Permission {
   ANALYTICS_EXPORT = 'analytics:export',
   AUDIT_READ = 'audit:read',
   AUDIT_EXPORT = 'audit:export',
+
+  // Curriculum & Learning
+  CURRICULUM_MANAGE = 'curriculum:manage',
+  CURRICULUM_READ = 'curriculum:read',
+  BATCH_MANAGE = 'batch:manage',
+  BATCH_READ = 'batch:read',
+  SYLLABUS_MANAGE = 'syllabus:manage',
+  SYLLABUS_READ = 'syllabus:read',
+  MATERIAL_UPLOAD = 'material:upload',
+  MATERIAL_READ = 'material:read',
+  MATERIAL_DELETE = 'material:delete',
+  AI_GENERATE_TEST = 'ai:generate_test',
+  LEARNING_READ = 'learning:read',
+  LEARNING_MANAGE = 'learning:manage',
 }

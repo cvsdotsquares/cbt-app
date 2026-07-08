@@ -10,12 +10,16 @@ import { usersApi } from '@/lib/api';
 import { useRequireAuth } from '@/hooks/use-auth';
 import { useDebounce } from '@/hooks/use-debounce';
 import { toast } from '@/hooks/use-toast';
-import { Search, Users } from 'lucide-react';
+import { Search, Users, Pencil, Trash2 } from 'lucide-react';
 import { CreateUserDialog } from '@/components/admin/create-user-dialog';
+import { EditUserDialog, type EditableUser } from '@/components/admin/edit-user-dialog';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Permission } from '@cbt/shared';
 import { PageHeader } from '@/components/layout/page-header';
 import { DataTable, DataTableHeader, DataTableHead, DataTableRow, DataTableCell, EmptyState } from '@/components/layout/data-table';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 
 type UserItem = {
   id: string;
@@ -31,12 +35,14 @@ type UserItem = {
 type UsersPageData = { items: UserItem[]; totalPages: number };
 
 export default function UsersPage() {
-  const { accessToken } = useRequireAuth(true);
+  const { accessToken, user: currentUser } = useRequireAuth(true);
   const { can } = usePermissions();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const debouncedSearch = useDebounce(search);
+  const [editUser, setEditUser] = useState<EditableUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UserItem | null>(null);
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['users', page, debouncedSearch],
@@ -109,6 +115,16 @@ export default function UsersPage() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) => usersApi.remove(accessToken!, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast({ title: 'User deactivated', variant: 'success' });
+      setDeleteTarget(null);
+    },
+    onError: (e: Error) => toast({ title: 'Delete failed', description: e.message, variant: 'destructive' }),
+  });
+
   const items = data?.items || [];
 
   return (
@@ -145,6 +161,7 @@ export default function UsersPage() {
               <DataTableHead>MFA</DataTableHead>
               <DataTableHead>Last Login</DataTableHead>
               <DataTableHead>Assign Role</DataTableHead>
+              <DataTableHead className="text-right">Actions</DataTableHead>
             </DataTableHeader>
             <tbody>
               {items.map((u) => {
@@ -199,6 +216,38 @@ export default function UsersPage() {
                         <span className="text-sm text-muted-foreground">—</span>
                       )}
                     </DataTableCell>
+                    <DataTableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        {can(Permission.USER_UPDATE) && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Edit user"
+                            onClick={() => setEditUser({
+                              id: u.id,
+                              firstName: u.firstName,
+                              lastName: u.lastName,
+                              email: u.email,
+                              status: u.status,
+                            })}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {can(Permission.USER_DELETE) && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            title="Deactivate user"
+                            disabled={u.id === currentUser?.id}
+                            onClick={() => setDeleteTarget(u)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </DataTableCell>
                   </DataTableRow>
                 );
               })}
@@ -225,6 +274,42 @@ export default function UsersPage() {
           <Button variant="outline" size="sm" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
         </div>
       )}
+
+      <EditUserDialog
+        accessToken={accessToken!}
+        user={editUser}
+        open={!!editUser}
+        onOpenChange={(open) => { if (!open) setEditUser(null); }}
+      />
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deactivate user?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget && (
+                <>
+                  <span className="font-medium text-foreground">
+                    {deleteTarget.firstName} {deleteTarget.lastName}
+                  </span>{' '}
+                  ({deleteTarget.email}) will be set to <strong>Inactive</strong> and signed out of all sessions.
+                  You can reactivate them later from Edit.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending || !deleteTarget}
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+            >
+              {deleteMutation.isPending ? 'Deactivating…' : 'Deactivate'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

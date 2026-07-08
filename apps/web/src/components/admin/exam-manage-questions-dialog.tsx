@@ -29,15 +29,20 @@ export function ExamManageQuestionsDialog({
     enabled: open && !!accessToken,
   });
 
-  const linked = (exam?.sections || []).flatMap(
-    (s: { questions?: { questionId: string; question: { title?: string; type: string; status: string; versions?: { content?: { text?: string } }[] } }[] }) =>
+  const linked: {
+    questionId: string;
+    title: string;
+    type: string;
+    status: string;
+  }[] = (exam?.sections || []).flatMap(
+    (s) =>
       (s.questions || []).map((q) => ({
         questionId: q.questionId,
         title: q.question?.title?.trim()
           || q.question?.versions?.[0]?.content?.text
           || 'Untitled question',
-        type: q.question?.type,
-        status: q.question?.status,
+        type: q.question?.type ?? '',
+        status: q.question?.status ?? '',
       })),
   );
 

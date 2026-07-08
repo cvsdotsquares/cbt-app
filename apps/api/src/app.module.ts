@@ -18,6 +18,12 @@ import { AuditModule } from './modules/audit/audit.module';
 import { HealthModule } from './modules/health/health.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AiModule } from './modules/ai/ai.module';
+import { CurriculumModule } from './modules/curriculum/curriculum.module';
+import { BatchesModule } from './modules/batches/batches.module';
+import { MaterialsModule } from './modules/materials/materials.module';
+import { LearningModule } from './modules/learning/learning.module';
+import { RagModule } from './modules/rag/rag.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
@@ -58,6 +64,12 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     HealthModule,
     AnalyticsModule,
     AiModule,
+    CurriculumModule,
+    BatchesModule,
+    MaterialsModule,
+    LearningModule,
+    RagModule,
+    OnboardingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

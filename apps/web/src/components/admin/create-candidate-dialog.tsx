@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,16 +12,40 @@ import { candidatesApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { Plus } from 'lucide-react';
 
+type BatchOption = {
+  id: string;
+  name: string;
+  academicYear: string;
+  academicClass: { id: string; name: string; level: number };
+};
+
+type ClassOption = { id: string; level: number; name: string };
+
 interface CreateCandidateDialogProps {
   accessToken: string;
+  batches?: BatchOption[];
+  classes?: ClassOption[];
 }
 
-export function CreateCandidateDialog({ accessToken }: CreateCandidateDialogProps) {
+export function CreateCandidateDialog({ accessToken, batches = [], classes = [] }: CreateCandidateDialogProps) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', password: '', registrationNumber: '',
+    academicClassId: '', batchId: '', rollNumber: '',
   });
+
+  const batchesForClass = useMemo(() => {
+    if (!form.academicClassId) return [];
+    return batches
+      .filter((b) => b.academicClass.id === form.academicClassId)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  }, [batches, form.academicClassId]);
+
+  const sortedClasses = useMemo(
+    () => [...classes].sort((a, b) => a.level - b.level),
+    [classes],
+  );
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -31,12 +55,18 @@ export function CreateCandidateDialog({ accessToken }: CreateCandidateDialogProp
         email: form.email,
         password: form.password,
         registrationNumber: form.registrationNumber || undefined,
+        batchId: form.batchId || undefined,
+        rollNumber: form.rollNumber || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] });
-      toast({ title: 'Candidate created', variant: 'success' });
+      queryClient.invalidateQueries({ queryKey: ['batches'] });
+      toast({ title: 'Student created', variant: 'success' });
       setOpen(false);
-      setForm({ firstName: '', lastName: '', email: '', password: '', registrationNumber: '' });
+      setForm({
+        firstName: '', lastName: '', email: '', password: '', registrationNumber: '',
+        academicClassId: '', batchId: '', rollNumber: '',
+      });
     },
     onError: (e: Error) => toast({ title: 'Failed', description: e.message, variant: 'destructive' }),
   });
@@ -44,21 +74,56 @@ export function CreateCandidateDialog({ accessToken }: CreateCandidateDialogProp
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button><Plus className="mr-2 h-4 w-4" /> Add Candidate</Button>
+        <Button><Plus className="mr-2 h-4 w-4" /> Add Student</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Candidate</DialogTitle>
-          <DialogDescription>Register a new candidate with login credentials.</DialogDescription>
+          <DialogTitle>Add Student</DialogTitle>
+          <DialogDescription>Register a new student and optionally assign a class batch.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>First Name</Label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
-            <div><Label>Last Name</Label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
+            <div><Label>First name</Label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
+            <div><Label>Last name</Label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
           </div>
           <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
           <div><Label>Password</Label><Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
-          <div><Label>Registration No. (optional)</Label><Input value={form.registrationNumber} onChange={(e) => setForm({ ...form, registrationNumber: e.target.value })} placeholder="Auto-generated if empty" /></div>
+          <div><Label>Registration no. (optional)</Label><Input value={form.registrationNumber} onChange={(e) => setForm({ ...form, registrationNumber: e.target.value })} placeholder="Auto-generated if empty" /></div>
+
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+            <p className="text-sm font-medium">Class &amp; batch (optional)</p>
+            <div>
+              <Label>Class</Label>
+              <select
+                className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={form.academicClassId}
+                onChange={(e) => setForm({ ...form, academicClassId: e.target.value, batchId: '' })}
+              >
+                <option value="">Not assigned yet</option>
+                {sortedClasses.map((cls) => (
+                  <option key={cls.id} value={cls.id}>{cls.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Batch</Label>
+              <select
+                className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
+                value={form.batchId}
+                disabled={!form.academicClassId}
+                onChange={(e) => setForm({ ...form, batchId: e.target.value })}
+              >
+                <option value="">{form.academicClassId ? 'Select batch…' : 'Choose class first'}</option>
+                {batchesForClass.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name} · {b.academicYear}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Roll number (optional)</Label>
+              <Input value={form.rollNumber} onChange={(e) => setForm({ ...form, rollNumber: e.target.value })} />
+            </div>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -66,7 +131,7 @@ export function CreateCandidateDialog({ accessToken }: CreateCandidateDialogProp
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending || !form.email || !form.password || !form.firstName}
           >
-            {createMutation.isPending ? 'Creating...' : 'Create Candidate'}
+            {createMutation.isPending ? 'Creating…' : 'Create student'}
           </Button>
         </DialogFooter>
       </DialogContent>

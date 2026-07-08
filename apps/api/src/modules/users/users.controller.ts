@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -51,6 +51,34 @@ export class UsersController {
     @CurrentUser('tenantId') tenantId: string,
   ) {
     return this.usersService.findOne(id, tenantId);
+  }
+
+  @Patch(':id')
+  @RequirePermissions(Permission.USER_UPDATE)
+  @ApiOperation({ summary: 'Update user profile or status' })
+  update(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() body: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
+      password?: string;
+    },
+  ) {
+    return this.usersService.update(id, tenantId, body);
+  }
+
+  @Delete(':id')
+  @RequirePermissions(Permission.USER_DELETE)
+  @ApiOperation({ summary: 'Deactivate user account' })
+  remove(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('sub') currentUserId: string,
+  ) {
+    return this.usersService.remove(id, tenantId, currentUserId);
   }
 
   @Post(':id/roles')

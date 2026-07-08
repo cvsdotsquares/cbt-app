@@ -48,6 +48,9 @@ services:
       JWT_REFRESH_SECRET: dev-refresh-secret-min-32-characters-long
       APP_URL: http://localhost:3000
       API_PORT: 4000
+      UPLOAD_DIR: /app/uploads/materials
+    volumes:
+      - api_uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,3 +74,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  api_uploads:

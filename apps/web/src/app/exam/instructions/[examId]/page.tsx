@@ -11,6 +11,7 @@ import { useRequireCandidate } from '@/hooks/use-auth';
 import { Logo } from '@/components/layout/logo';
 import { getExamStatus } from '@/lib/exam-status';
 import { formatExamTimeRange } from '@/lib/exam-dates';
+import { normalizeSecurityPolicy, requestDocumentFullscreen } from '@/lib/exam-security-policy';
 import { AlertTriangle, Clock, Shield, CheckCircle2, ArrowLeft, Calendar } from 'lucide-react';
 
 type ExamInstructions = {
@@ -21,7 +22,7 @@ type ExamInstructions = {
   endTime: string;
   timezone?: string;
   settings?: { durationMinutes: number; passingScore: number; negativeMarking: boolean };
-  securityPolicy?: { fullscreen: boolean; blockCopyPaste: boolean; proctoringEnabled: boolean };
+  securityPolicy?: { fullscreen?: boolean; fullscreenRequired?: boolean; blockCopyPaste?: boolean; proctoringEnabled?: boolean };
   registration: { sessions?: { status: string }[] };
 };
 
@@ -50,7 +51,7 @@ export default function ExamInstructionsPage() {
   if (!exam) return <div className="flex min-h-screen items-center justify-center mesh-bg">Loading exam details...</div>;
 
   const settings = exam.settings ?? { durationMinutes: 30, passingScore: 40, negativeMarking: true };
-  const security = exam.securityPolicy ?? { fullscreen: true, blockCopyPaste: true, proctoringEnabled: false };
+  const security = normalizeSecurityPolicy(exam.securityPolicy);
   const tz = exam.timezone || DEFAULT_EXAM_TIMEZONE;
   const status = getExamStatus({
     exam: { status: exam.status, startTime: exam.startTime, endTime: exam.endTime },
@@ -150,16 +151,11 @@ export default function ExamInstructionsPage() {
           className="w-full shadow-sm"
           size="lg"
           disabled={!canBegin}
-          onClick={async () => {
+          onClick={() => {
             if (security.fullscreen) {
-              try {
-                const el = document.documentElement;
-                const request = el.requestFullscreen
-                  ?? (el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen;
-                if (request) await request.call(el);
-              } catch {
-                /* start page shows fullscreen gate */
-              }
+              // Fire synchronously while the click gesture is active; navigation can
+              // cancel fullscreen if we await before routing.
+              void requestDocumentFullscreen();
             }
             router.push(`/exam/start/${examId}`);
           }}

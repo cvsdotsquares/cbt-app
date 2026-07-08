@@ -87,6 +87,102 @@ export class QuestionsService {
     return { items, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
   }
 
+  async findOne(id: string, tenantId: string) {
+    const question = await this.prisma.question.findFirst({
+      where: { id, tenantId },
+      include: {
+        versions: { orderBy: { versionNumber: 'desc' }, take: 1 },
+        tags: true,
+      },
+    });
+    if (!question) throw new NotFoundException('Question not found');
+    return question;
+  }
+
+  async update(
+    id: string,
+    tenantId: string,
+    _userId: string,
+    data: {
+      type?: QuestionType;
+      difficulty?: QuestionDifficulty;
+      title?: string;
+      content?: Record<string, unknown>;
+      options?: Record<string, unknown>;
+      correctAnswer?: Record<string, unknown>;
+      marks?: number;
+      negativeMarks?: number;
+    },
+  ) {
+    const question = await this.prisma.question.findFirst({
+      where: { id, tenantId },
+      include: {
+        versions: { orderBy: { versionNumber: 'desc' }, take: 1 },
+        _count: { select: { responses: true } },
+      },
+    });
+    if (!question) throw new NotFoundException('Question not found');
+
+    if (question._count.responses > 0) {
+      throw new BadRequestException('Cannot edit: candidates have already answered this question');
+    }
+
+    const latest = question.versions[0];
+    const versionData = {
+      content: (data.content ?? latest?.content) as Prisma.InputJsonValue,
+      options: (data.options ?? latest?.options) as Prisma.InputJsonValue,
+      correctAnswer: (data.correctAnswer ?? latest?.correctAnswer) as Prisma.InputJsonValue,
+      marks: data.marks ?? latest?.marks ?? 1,
+      negativeMarks: data.negativeMarks ?? latest?.negativeMarks ?? 0,
+    };
+
+    let versionId = latest?.id;
+    if (latest) {
+      await this.prisma.questionVersion.update({
+        where: { id: latest.id },
+        data: versionData,
+      });
+    } else {
+      const created = await this.prisma.questionVersion.create({
+        data: {
+          questionId: id,
+          versionNumber: 1,
+          ...versionData,
+        },
+      });
+      versionId = created.id;
+    }
+
+    const updated = await this.prisma.question.update({
+      where: { id },
+      data: {
+        ...(data.type && { type: data.type }),
+        ...(data.difficulty && { difficulty: data.difficulty }),
+        ...(data.title !== undefined && { title: data.title }),
+        currentVersionId: versionId,
+      },
+      include: {
+        versions: { orderBy: { versionNumber: 'desc' }, take: 1 },
+        tags: true,
+      },
+    });
+
+    if (data.marks !== undefined || data.negativeMarks !== undefined) {
+      await this.prisma.examQuestion.updateMany({
+        where: {
+          questionId: id,
+          section: { exam: { tenantId, status: 'DRAFT' } },
+        },
+        data: {
+          ...(data.marks !== undefined && { marks: data.marks }),
+          ...(data.negativeMarks !== undefined && { negativeMarks: data.negativeMarks }),
+        },
+      });
+    }
+
+    return updated;
+  }
+
   async approve(id: string, userId: string, tenantId: string) {
     const question = await this.prisma.question.findFirst({
       where: { id, tenantId },

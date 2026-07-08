@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { CandidatesService } from './candidates.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -21,8 +21,15 @@ export class CandidatesController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
+    @Query('batchId') batchId?: string,
+    @Query('academicClassId') academicClassId?: string,
+    @Query('unassigned') unassigned?: string,
   ) {
-    return this.candidatesService.findAll(tenantId, page, limit, search);
+    return this.candidatesService.findAll(tenantId, page, limit, search, {
+      batchId,
+      academicClassId,
+      unassigned: unassigned === 'true' || unassigned === '1',
+    });
   }
 
   @Post()
@@ -30,7 +37,15 @@ export class CandidatesController {
   @ApiOperation({ summary: 'Create a candidate account' })
   create(
     @CurrentUser('tenantId') tenantId: string,
-    @Body() body: { email: string; password: string; firstName: string; lastName: string; registrationNumber?: string },
+    @Body() body: {
+      email: string;
+      password: string;
+      firstName: string;
+      lastName: string;
+      registrationNumber?: string;
+      batchId?: string;
+      rollNumber?: string;
+    },
   ) {
     return this.candidatesService.create(tenantId, body);
   }
@@ -78,5 +93,41 @@ export class CandidatesController {
     @Body('status') status: 'VERIFIED' | 'REJECTED',
   ) {
     return this.candidatesService.updateKyc(id, tenantId, status);
+  }
+
+  @Patch(':id/batch')
+  @RequirePermissions(Permission.BATCH_MANAGE)
+  @ApiOperation({ summary: 'Assign or change student class/batch' })
+  setBatch(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() body: { batchId: string | null; rollNumber?: string },
+  ) {
+    return this.candidatesService.setBatchEnrollment(id, tenantId, body);
+  }
+
+  @Patch(':id')
+  @RequirePermissions(Permission.CANDIDATE_UPDATE)
+  @ApiOperation({ summary: 'Update student profile' })
+  update(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() body: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      registrationNumber?: string;
+      status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
+      password?: string;
+    },
+  ) {
+    return this.candidatesService.update(id, tenantId, body);
+  }
+
+  @Delete(':id')
+  @RequirePermissions(Permission.CANDIDATE_DELETE)
+  @ApiOperation({ summary: 'Remove student from institute (deactivate account)' })
+  remove(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
+    return this.candidatesService.remove(id, tenantId);
   }
 }

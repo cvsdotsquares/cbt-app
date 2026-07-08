@@ -1,6 +1,6 @@
 const STAFF_ROLES = [
-  'SUPER_ADMIN', 'ORG_ADMIN', 'EXAM_MANAGER', 'QUESTION_MODERATOR',
-  'PROCTOR', 'EVALUATOR', 'AUDITOR',
+  'SUPER_ADMIN', 'ORG_ADMIN', 'INSTITUTE_ADMIN', 'TEACHER',
+  'EXAM_MANAGER', 'QUESTION_MODERATOR', 'PROCTOR', 'EVALUATOR', 'AUDITOR',
 ];
 
 export function normalizeRoles(roles: unknown): string[] {
@@ -16,10 +16,10 @@ export function isAdmin(roles: unknown) {
   return normalized.some((role) => STAFF_ROLES.includes(role));
 }
 
-/** Pure candidate — has CANDIDATE role and no staff roles. */
+/** Pure candidate/student — has CANDIDATE or STUDENT role and no staff roles. */
 export function isCandidate(roles: unknown) {
   const normalized = normalizeRoles(roles);
-  return normalized.includes('CANDIDATE') && !isAdmin(normalized);
+  return (normalized.includes('CANDIDATE') || normalized.includes('STUDENT')) && !isAdmin(normalized);
 }
 
 export function isStaff(roles: unknown) {

@@ -193,17 +193,45 @@ Return JSON matching the schema. Use marks: 2 and negativeMarks: 0.5 for each qu
 
       const text = q.content?.text?.trim() || `Question ${i + 1} about ${params.topic}`;
 
+      let finalOptions = normalizedOptions;
+      let finalCorrect = correctValue;
+      if (params.type === 'MCQ' && typeof correctValue === 'string' && ['a', 'b', 'c', 'd'].includes(correctValue)) {
+        const shuffled = this.shuffleMcqOptions(normalizedOptions, correctValue);
+        finalOptions = shuffled.options;
+        finalCorrect = shuffled.correct;
+      }
+
       return {
         title: q.title?.trim() || `${params.topic} — Question ${i + 1}`,
         type: params.type,
         difficulty: params.difficulty,
         content: { text },
-        options: normalizedOptions,
-        correctAnswer: { value: correctValue as string | string[] },
+        options: finalOptions,
+        correctAnswer: { value: finalCorrect as string | string[] },
         marks: q.marks ?? 2,
         negativeMarks: q.negativeMarks ?? 0.5,
       };
     });
+  }
+
+  private shuffleMcqOptions(
+    options: Record<string, string>,
+    correct: string,
+  ): { options: Record<string, string>; correct: string } {
+    const keys = ['a', 'b', 'c', 'd'] as const;
+    const entries = keys.map((key) => ({ key, value: options[key] }));
+    for (let i = entries.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [entries[i], entries[j]] = [entries[j], entries[i]];
+    }
+    const shuffled: Record<string, string> = {};
+    let newCorrect = correct;
+    entries.forEach((entry, index) => {
+      const newKey = keys[index];
+      shuffled[newKey] = entry.value;
+      if (entry.key === correct) newCorrect = newKey;
+    });
+    return { options: shuffled, correct: newCorrect };
   }
 
   private generateFromTemplate(params: { topic: string; count: number; difficulty: string; type: string }): GeneratedQuestion[] {

@@ -54,6 +54,11 @@ export class ExamsService {
             orderBy: { orderIndex: 'asc' },
             include: { _count: { select: { questions: true } } },
           },
+          aiTestConfig: {
+            include: {
+              batch: { include: { academicClass: { select: { id: true, name: true, level: true } } } },
+            },
+          },
           _count: { select: { registrations: true, sessions: true, results: true } },
         },
         skip: (p - 1) * l,
@@ -69,7 +74,17 @@ export class ExamsService {
       where: { id, tenantId },
       include: {
         sections: {
-          include: { questions: { include: { question: true } } },
+          include: {
+            questions: {
+              include: {
+                question: {
+                  include: {
+                    versions: { orderBy: { versionNumber: 'desc' }, take: 1 },
+                  },
+                },
+              },
+            },
+          },
           orderBy: { orderIndex: 'asc' },
         },
         registrations: {
@@ -77,6 +92,11 @@ export class ExamsService {
             candidate: {
               include: { user: { select: { firstName: true, lastName: true, email: true } } },
             },
+          },
+        },
+        aiTestConfig: {
+          include: {
+            batch: { include: { academicClass: true } },
           },
         },
       },
@@ -98,6 +118,20 @@ export class ExamsService {
     }
     if (registrationCount === 0) {
       throw new BadRequestException('Assign at least one candidate before publishing');
+    }
+
+    const examQuestionIds = (
+      await this.prisma.examQuestion.findMany({
+        where: { examId: id },
+        select: { questionId: true },
+      })
+    ).map((eq) => eq.questionId);
+
+    if (examQuestionIds.length) {
+      await this.prisma.question.updateMany({
+        where: { id: { in: examQuestionIds }, status: 'DRAFT' },
+        data: { status: 'APPROVED' },
+      });
     }
 
     return this.prisma.exam.update({
@@ -150,6 +184,63 @@ export class ExamsService {
     if (!data.length) return { count: 0, skipped: candidateIds.length };
     const result = await this.prisma.examRegistration.createMany({ data });
     return { count: result.count, skipped: candidateIds.length - result.count };
+  }
+
+  /** Set exactly which candidates are registered — draft exams only. */
+  async syncCandidates(examId: string, tenantId: string, candidateIds: string[]) {
+    const exam = await this.prisma.exam.findFirst({ where: { id: examId, tenantId } });
+    if (!exam) throw new NotFoundException('Exam not found');
+    if (exam.status !== 'DRAFT') {
+      throw new BadRequestException('Only draft exams can update student assignments');
+    }
+
+    const uniqueIds = [...new Set(candidateIds)];
+    const aiConfig = await this.prisma.aiTestConfig.findUnique({ where: { examId } });
+
+    if (aiConfig?.batchId) {
+      const enrolled = await this.prisma.batchEnrollment.findMany({
+        where: { batchId: aiConfig.batchId, candidateId: { in: uniqueIds } },
+        select: { candidateId: true },
+      });
+      if (enrolled.length !== uniqueIds.length) {
+        throw new BadRequestException('Students must belong to the batch linked to this test');
+      }
+    } else if (uniqueIds.length) {
+      const candidates = await this.prisma.candidate.findMany({
+        where: { id: { in: uniqueIds }, tenantId },
+        select: { id: true },
+      });
+      if (candidates.length !== uniqueIds.length) {
+        throw new BadRequestException('One or more students are invalid for this tenant');
+      }
+    }
+
+    const existing = await this.prisma.examRegistration.findMany({ where: { examId } });
+    const existingIds = new Set(existing.map((r) => r.candidateId));
+    const targetIds = new Set(uniqueIds);
+
+    const toRemove = existing.filter((r) => !targetIds.has(r.candidateId));
+    for (const reg of toRemove) {
+      const sessions = await this.prisma.examSession.count({ where: { registrationId: reg.id } });
+      if (sessions > 0) {
+        throw new BadRequestException('Cannot remove students who already started this exam');
+      }
+    }
+
+    if (toRemove.length) {
+      await this.prisma.examRegistration.deleteMany({
+        where: { examId, candidateId: { in: toRemove.map((r) => r.candidateId) } },
+      });
+    }
+
+    const toAdd = uniqueIds.filter((id) => !existingIds.has(id));
+    if (toAdd.length) {
+      await this.prisma.examRegistration.createMany({
+        data: toAdd.map((candidateId) => ({ examId, candidateId })),
+      });
+    }
+
+    return { assigned: uniqueIds.length, added: toAdd.length, removed: toRemove.length };
   }
 
   async addQuestions(

@@ -210,7 +210,7 @@ export default function QuestionsPage() {
             <DataTableHead>Delete</DataTableHead>
           </DataTableHeader>
           <tbody>
-            {items.map((q: { id: string; title: string; type: string; difficulty: string; status: string }) => (
+            {items.map((q) => (
               <DataTableRow key={q.id}>
                 <DataTableCell className="font-medium">{q.title || 'Untitled'}</DataTableCell>
                 <DataTableCell><Badge variant="outline">{q.type}</Badge></DataTableCell>

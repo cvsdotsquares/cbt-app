@@ -133,4 +133,97 @@ export class UsersService {
 
     return this.prisma.userRole.delete({ where: { id: assignment.id } });
   }
+
+  async update(
+    id: string,
+    tenantId: string,
+    data: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
+      password?: string;
+    },
+  ) {
+    const user = await this.prisma.user.findFirst({ where: { id, tenantId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (data.email && data.email !== user.email) {
+      const existing = await this.prisma.user.findUnique({
+        where: { tenantId_email: { tenantId, email: data.email } },
+      });
+      if (existing) throw new ConflictException('Email already in use');
+    }
+
+    const updateData: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      status?: typeof data.status;
+      passwordHash?: string;
+    } = {};
+
+    if (data.firstName !== undefined) updateData.firstName = data.firstName.trim();
+    if (data.lastName !== undefined) updateData.lastName = data.lastName.trim();
+    if (data.email !== undefined) updateData.email = data.email.trim().toLowerCase();
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.password?.trim()) {
+      updateData.passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        status: true,
+        mfaEnabled: true,
+        lastLoginAt: true,
+        createdAt: true,
+        userRoles: { include: { role: { select: { id: true, name: true } } } },
+      },
+    });
+  }
+
+  async remove(id: string, tenantId: string, currentUserId: string) {
+    if (id === currentUserId) {
+      throw new BadRequestException('You cannot delete your own account');
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: { id, tenantId },
+      include: {
+        candidate: { select: { id: true } },
+        userRoles: { include: { role: { select: { name: true } } } },
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.candidate) {
+      throw new BadRequestException(
+        'This user is a student account. Manage them from the Students page instead.',
+      );
+    }
+
+    if (user.userRoles.some((ur) => ur.role.name === 'SUPER_ADMIN')) {
+      throw new BadRequestException('Cannot delete a super admin account');
+    }
+
+    await this.prisma.session.deleteMany({ where: { userId: id } });
+
+    return this.prisma.user.update({
+      where: { id },
+      data: { status: 'INACTIVE' },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        status: true,
+      },
+    });
+  }
 }

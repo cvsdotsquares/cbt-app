@@ -2,40 +2,29 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { examsApi } from '@/lib/api';
+import { examsApi, type ExamListItem } from '@/lib/api';
 import { useRequireAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Permission } from '@cbt/shared';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/layout/data-table';
-import { ExamAssignQuestionsDialog } from '@/components/admin/exam-assign-questions-dialog';
 import { ExamAssignCandidatesDialog } from '@/components/admin/exam-assign-candidates-dialog';
-import { ExamManageQuestionsDialog } from '@/components/admin/exam-manage-questions-dialog';
 import { toast } from '@/hooks/use-toast';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { DEFAULT_EXAM_TIMEZONE, localDateTimeToUtcIso } from '@cbt/shared';
 import { EXAM_TIMEZONE_OPTIONS, formatExamTimeRange, utcIsoToLocalDateTimeInput } from '@/lib/exam-dates';
-import { FileText, Plus, Users, Clock, HelpCircle, X } from 'lucide-react';
+import { FileText, Users, Clock, HelpCircle, GraduationCap } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/skeleton';
 
-type ExamItem = {
-  id: string;
-  title: string;
-  code: string;
-  status: string;
-  startTime: string;
-  endTime: string;
-  timezone?: string;
-  sections?: { id: string; _count?: { questions: number } }[];
-  _count?: { registrations: number; sessions: number; results: number };
-};
+type ExamItem = ExamListItem;
 
 function questionCount(exam: ExamItem) {
   return (exam.sections || []).reduce((sum, s) => sum + (s._count?.questions ?? 0), 0);
@@ -45,43 +34,15 @@ export default function ExamsPage() {
   const { accessToken } = useRequireAuth(true);
   const { can } = usePermissions();
   const queryClient = useQueryClient();
-  const [showCreate, setShowCreate] = useState(false);
-  const [questionsDialog, setQuestionsDialog] = useState<{ examId: string; sectionId: string; title: string } | null>(null);
-  const [manageQuestionsDialog, setManageQuestionsDialog] = useState<{ examId: string; title: string } | null>(null);
   const [candidatesDialog, setCandidatesDialog] = useState<{ examId: string; title: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; code: string } | null>(null);
   const [scheduleTarget, setScheduleTarget] = useState<ExamItem | null>(null);
   const [scheduleForm, setScheduleForm] = useState({ startTime: '', endTime: '', timezone: DEFAULT_EXAM_TIMEZONE });
-  const [form, setForm] = useState({
-    title: '', code: '', type: 'RECRUITMENT', durationMinutes: 30,
-    startTime: '', endTime: '', timezone: DEFAULT_EXAM_TIMEZONE,
-  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['exams'],
     queryFn: () => examsApi.list(accessToken!),
     enabled: !!accessToken,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: () => examsApi.create(accessToken!, {
-      title: form.title,
-      code: form.code,
-      type: form.type,
-      timezone: form.timezone,
-      startTime: localDateTimeToUtcIso(form.startTime, form.timezone),
-      endTime: localDateTimeToUtcIso(form.endTime, form.timezone),
-      settings: { durationMinutes: form.durationMinutes, passingScore: 40, negativeMarking: true, shuffleQuestions: false },
-      securityPolicy: { proctoringEnabled: false, fullscreen: true, blockCopyPaste: true },
-      sections: [{ name: 'Section A', orderIndex: 1, durationMinutes: form.durationMinutes }],
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['exams'] });
-      setShowCreate(false);
-      setForm({ title: '', code: '', type: 'RECRUITMENT', durationMinutes: 30, startTime: '', endTime: '', timezone: DEFAULT_EXAM_TIMEZONE });
-      toast({ title: 'Exam created', description: 'Add questions and assign candidates before publishing.', variant: 'success' });
-    },
-    onError: (e: Error) => toast({ title: 'Failed to create exam', description: e.message, variant: 'destructive' }),
   });
 
   const publishMutation = useMutation({
@@ -140,65 +101,17 @@ export default function ExamsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Exams" description="Create, publish, and manage your examination lifecycle" badge="Core">
-        {can(Permission.EXAM_CREATE) && (
-        <Button
-          variant={showCreate ? 'outline' : 'default'}
-          onClick={() => setShowCreate(!showCreate)}
-        >
-          {showCreate ? (
-            <>
-              <X className="mr-2 h-4 w-4" />
-              Cancel
-            </>
-          ) : (
-            <>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Exam
-            </>
-          )}
-        </Button>
-        )}
-      </PageHeader>
-
-      {showCreate && (
-        <Card className="surface-card border-primary/20">
-          <CardHeader className="border-b border-border/60">
-            <CardTitle className="text-base font-bold">New Examination</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-5 pt-6 md:grid-cols-2">
-            <div className="space-y-2"><Label>Title</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Aptitude Test 2026" /></div>
-            <div className="space-y-2"><Label>Code</Label><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="DEMO-2026" /></div>
-            <div className="space-y-2"><Label>Start Time</Label><Input type="datetime-local" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></div>
-            <div className="space-y-2"><Label>End Time</Label><Input type="datetime-local" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></div>
-            <div className="space-y-2">
-              <Label>Timezone</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={form.timezone}
-                onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-              >
-                {EXAM_TIMEZONE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">Start and end times are interpreted in this timezone.</p>
-            </div>
-            <div className="space-y-2"><Label>Duration (minutes)</Label><Input type="number" value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: +e.target.value })} /></div>
-            <div className="flex items-end">
-              <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.title || !form.code || !form.startTime || !form.endTime}>
-                {createMutation.isPending ? 'Creating...' : 'Create Exam'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <PageHeader
+        title="Exams"
+        description="Publish and manage tests created from Create Test"
+        badge="Core"
+      />
 
       <div className="space-y-3">
         {items.map((exam) => {
           const qCount = questionCount(exam);
           const cCount = exam._count?.registrations ?? 0;
-          const sectionId = exam.sections?.[0]?.id;
+          const batch = exam.aiTestConfig?.batch;
           const readyToPublish = qCount > 0 && cCount > 0;
 
           return (
@@ -209,9 +122,15 @@ export default function ExamsPage() {
                     <FileText className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-bold">{exam.title}</h3>
                       <Badge variant={exam.status === 'PUBLISHED' ? 'success' : 'warning'}>{exam.status}</Badge>
+                      {batch && (
+                        <Badge variant="secondary" className="gap-1 normal-case tracking-normal">
+                          <GraduationCap className="h-3 w-3" />
+                          {batch.academicClass.name} · {batch.name}
+                        </Badge>
+                      )}
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{exam.code}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
@@ -224,9 +143,11 @@ export default function ExamsPage() {
                     </div>
                     {exam.status === 'DRAFT' && !readyToPublish && (
                       <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                        {qCount === 0 && cCount === 0 && 'Add questions and assign candidates to publish.'}
-                        {qCount === 0 && cCount > 0 && 'Add at least one approved question to publish.'}
-                        {qCount > 0 && cCount === 0 && 'Assign at least one candidate to publish.'}
+                        {qCount === 0 && cCount === 0 && 'Finish question review in Create Test, then manage students here.'}
+                        {qCount === 0 && cCount > 0 && 'Questions are added from Create Test — finish review there first.'}
+                        {qCount > 0 && cCount === 0 && batch
+                          ? `No students selected for ${batch.name}. Open Students to include batch members.`
+                          : qCount > 0 && cCount === 0 && 'Select at least one student to publish.'}
                       </p>
                     )}
                   </div>
@@ -239,32 +160,13 @@ export default function ExamsPage() {
                           Edit Schedule
                         </Button>
                       )}
-                      {can(Permission.EXAM_UPDATE) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={!sectionId}
-                        onClick={() => sectionId && setQuestionsDialog({ examId: exam.id, sectionId, title: exam.title })}
-                      >
-                        Add Questions
-                      </Button>
-                      )}
-                      {qCount > 0 && can(Permission.EXAM_UPDATE) && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setManageQuestionsDialog({ examId: exam.id, title: exam.title })}
-                        >
-                          Manage Questions
-                        </Button>
-                      )}
-                      {can(Permission.EXAM_ASSIGN_CANDIDATES) && (
+                      {can(Permission.EXAM_ASSIGN_CANDIDATES) && batch && (
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => setCandidatesDialog({ examId: exam.id, title: exam.title })}
                       >
-                        Assign Candidates
+                        Students ({cCount})
                       </Button>
                       )}
                       {can(Permission.EXAM_PUBLISH) && (
@@ -301,31 +203,19 @@ export default function ExamsPage() {
         })}
         {!items.length && (
           <Card className="surface-card">
-            <EmptyState icon={FileText} title="No exams yet" description="Create your first examination to get started." />
+            <EmptyState
+              icon={FileText}
+              title="No exams yet"
+              description="Create a test from Create Test — it will appear here for publishing and candidate assignment."
+            />
+            <div className="flex justify-center pb-8">
+              <Button asChild>
+                <Link href="/dashboard/ai-tests">Go to Create Test</Link>
+              </Button>
+            </div>
           </Card>
         )}
       </div>
-
-      {questionsDialog && accessToken && (
-        <ExamAssignQuestionsDialog
-          accessToken={accessToken}
-          examId={questionsDialog.examId}
-          sectionId={questionsDialog.sectionId}
-          examTitle={questionsDialog.title}
-          open={!!questionsDialog}
-          onOpenChange={(open) => !open && setQuestionsDialog(null)}
-        />
-      )}
-
-      {manageQuestionsDialog && accessToken && (
-        <ExamManageQuestionsDialog
-          accessToken={accessToken}
-          examId={manageQuestionsDialog.examId}
-          examTitle={manageQuestionsDialog.title}
-          open={!!manageQuestionsDialog}
-          onOpenChange={(open) => !open && setManageQuestionsDialog(null)}
-        />
-      )}
 
       {candidatesDialog && accessToken && (
         <ExamAssignCandidatesDialog

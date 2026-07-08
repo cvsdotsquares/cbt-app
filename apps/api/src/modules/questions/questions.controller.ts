@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { QuestionsService } from './questions.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -41,6 +41,24 @@ export class QuestionsController {
       query.page,
       query.limit,
     );
+  }
+
+  @Get(':id')
+  @RequirePermissions(Permission.QUESTION_READ)
+  findOne(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
+    return this.questionsService.findOne(id, tenantId);
+  }
+
+  @Patch(':id')
+  @RequirePermissions(Permission.QUESTION_UPDATE)
+  @ApiOperation({ summary: 'Update question content and answers' })
+  update(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.questionsService.update(id, tenantId, userId, body as never);
   }
 
   @Post(':id/approve')

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ExamsService } from './exams.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -91,6 +91,17 @@ export class ExamsController {
     @Body('candidateIds') candidateIds: string[],
   ) {
     return this.examsService.assignCandidates(examId, tenantId, candidateIds);
+  }
+
+  @Put(':id/candidates')
+  @RequirePermissions(Permission.EXAM_ASSIGN_CANDIDATES)
+  @ApiOperation({ summary: 'Sync exam students (draft only)' })
+  syncCandidates(
+    @Param('id') examId: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @Body('candidateIds') candidateIds: string[],
+  ) {
+    return this.examsService.syncCandidates(examId, tenantId, candidateIds ?? []);
   }
 
   @Delete(':id/questions/:questionId')

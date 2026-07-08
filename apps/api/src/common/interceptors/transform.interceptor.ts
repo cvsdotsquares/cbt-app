@@ -3,6 +3,7 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  StreamableFile,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -12,12 +13,17 @@ export class TransformInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest();
     return next.handle().pipe(
-      map((data) => ({
-        success: true,
-        data,
-        timestamp: new Date().toISOString(),
-        requestId: request.requestId || 'unknown',
-      })),
+      map((data) => {
+        if (data instanceof StreamableFile) {
+          return data;
+        }
+        return {
+          success: true,
+          data,
+          timestamp: new Date().toISOString(),
+          requestId: request.requestId || 'unknown',
+        };
+      }),
     );
   }
 }

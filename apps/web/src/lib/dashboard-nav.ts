@@ -7,8 +7,15 @@ export interface DashboardRoute {
 }
 
 export const DASHBOARD_ROUTES: DashboardRoute[] = [
+  { path: '/dashboard/guide', permission: Permission.TENANT_READ },
   { path: '/dashboard', permission: Permission.ANALYTICS_VIEW, exact: true },
   { path: '/dashboard/analytics', permission: Permission.ANALYTICS_VIEW },
+  { path: '/dashboard/teacher', permission: Permission.LEARNING_MANAGE },
+  { path: '/dashboard/syllabus', permission: Permission.CURRICULUM_READ },
+  { path: '/dashboard/batches', permission: Permission.BATCH_READ },
+  { path: '/dashboard/materials', permission: Permission.MATERIAL_READ },
+  { path: '/dashboard/ai-tests', permission: Permission.AI_GENERATE_TEST },
+  { path: '/dashboard/institutes', permission: Permission.TENANT_CREATE },
   { path: '/dashboard/exams', permission: Permission.EXAM_READ },
   { path: '/dashboard/ai', permission: Permission.QUESTION_CREATE },
   { path: '/dashboard/questions', permission: Permission.QUESTION_READ },

@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { candidatesApi, examsApi } from '@/lib/api';
+import { batchesApi, examsApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { GraduationCap, Loader2 } from 'lucide-react';
 
 interface ExamAssignCandidatesDialogProps {
   accessToken: string;
@@ -17,6 +18,14 @@ interface ExamAssignCandidatesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+type BatchStudent = {
+  candidateId: string;
+  rollNumber?: string | null;
+  firstName: string;
+  lastName: string;
+  registrationNumber: string;
+};
 
 export function ExamAssignCandidatesDialog({
   accessToken, examId, examTitle, open, onOpenChange,
@@ -30,25 +39,46 @@ export function ExamAssignCandidatesDialog({
     enabled: open && !!accessToken,
   });
 
-  const { data: candidates, isLoading: candidatesLoading } = useQuery({
-    queryKey: ['candidates'],
-    queryFn: () => candidatesApi.list(accessToken, 1, '', 200),
-    enabled: open && !!accessToken,
+  const linkedBatch = exam?.aiTestConfig?.batch ?? null;
+  const batchId = linkedBatch?.id;
+
+  const { data: batchDetail, isLoading: batchLoading } = useQuery({
+    queryKey: ['batch-detail', batchId],
+    queryFn: () => batchesApi.get(accessToken, batchId!) as Promise<{
+      enrollments: {
+        rollNumber?: string | null;
+        candidate: {
+          id: string;
+          registrationNumber: string;
+          user: { firstName: string; lastName: string };
+        };
+      }[];
+    }>,
+    enabled: open && !!accessToken && !!batchId,
   });
 
-  const assignedIds = useMemo(
-    () => new Set((exam?.registrations || []).map((r: { candidateId: string }) => r.candidateId)),
-    [exam],
-  );
-
-  const available = useMemo(
-    () => (candidates?.items || []).filter((c: { id: string }) => !assignedIds.has(c.id)),
-    [candidates, assignedIds],
-  );
+  const batchStudents = useMemo<BatchStudent[]>(() => {
+    if (!batchDetail?.enrollments) return [];
+    return batchDetail.enrollments.map((e) => ({
+      candidateId: e.candidate.id,
+      rollNumber: e.rollNumber,
+      firstName: e.candidate.user.firstName,
+      lastName: e.candidate.user.lastName,
+      registrationNumber: e.candidate.registrationNumber,
+    }));
+  }, [batchDetail]);
 
   useEffect(() => {
-    if (!open) setSelected(new Set());
-  }, [open]);
+    if (!open) {
+      setSelected(new Set());
+      return;
+    }
+    if (!batchStudents.length) return;
+    const onExam = new Set((exam?.registrations ?? []).map((r: { candidateId: string }) => r.candidateId));
+    setSelected(new Set(
+      batchStudents.filter((s) => onExam.has(s.candidateId)).map((s) => s.candidateId),
+    ));
+  }, [open, batchStudents, exam?.registrations]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -59,70 +89,95 @@ export function ExamAssignCandidatesDialog({
     });
   };
 
-  const assignMutation = useMutation({
-    mutationFn: () => examsApi.assignCandidates(accessToken, examId, [...selected]),
-    onSuccess: (data: { count?: number; skipped?: number }) => {
+  const selectAll = () => setSelected(new Set(batchStudents.map((s) => s.candidateId)));
+  const selectNone = () => setSelected(new Set());
+
+  const saveMutation = useMutation({
+    mutationFn: () => examsApi.syncCandidates(accessToken, examId, [...selected]),
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['exams'] });
       queryClient.invalidateQueries({ queryKey: ['exam', examId] });
-      const count = data.count ?? 0;
-      const skipped = data.skipped ?? 0;
-      if (count > 0) {
-        toast({
-          title: `${count} candidate${count === 1 ? '' : 's'} assigned`,
-          description: skipped > 0 ? `${skipped} already assigned` : undefined,
-          variant: 'success',
-        });
-      } else {
-        toast({ title: 'No new assignments', description: 'Selected candidates are already assigned', variant: 'destructive' });
-      }
+      const parts: string[] = [];
+      if (data.added) parts.push(`${data.added} added`);
+      if (data.removed) parts.push(`${data.removed} removed`);
+      toast({
+        title: 'Students updated',
+        description: parts.length ? parts.join(', ') : `${data.assigned ?? selected.size} on this exam`,
+        variant: 'success',
+      });
       onOpenChange(false);
     },
-    onError: (e: Error) => toast({ title: 'Failed to assign candidates', description: e.message, variant: 'destructive' }),
+    onError: (e: Error) => toast({ title: 'Could not update students', description: e.message, variant: 'destructive' }),
   });
 
-  const loading = examLoading || candidatesLoading;
+  const loading = examLoading || (!!batchId && batchLoading);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-lg overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Assign Candidates</DialogTitle>
+          <DialogTitle>Exam students</DialogTitle>
           <DialogDescription>
-            Select candidates for <span className="font-medium text-foreground">{examTitle}</span>.
-            {assignedIds.size > 0 && ` ${assignedIds.size} already assigned.`}
+            Checked students will take <span className="font-medium text-foreground">{examTitle}</span>.
+            Uncheck to exclude someone from this exam.
           </DialogDescription>
         </DialogHeader>
+
+        {linkedBatch && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="gap-1.5 normal-case tracking-normal">
+              <GraduationCap className="h-3.5 w-3.5" />
+              {linkedBatch.academicClass.name} · {linkedBatch.name}
+            </Badge>
+            <Badge variant="outline" className="normal-case tracking-normal">
+              {linkedBatch.academicYear}
+            </Badge>
+          </div>
+        )}
+
+        {batchStudents.length > 0 && (
+          <div className="flex gap-2 text-xs">
+            <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={selectAll}>
+              Select all
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={selectNone}>
+              Select none
+            </Button>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto space-y-2 py-2 min-h-0">
           {loading && (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading...
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading students…
             </div>
           )}
-          {!loading && !available.length && (
+          {!loading && !linkedBatch && (
             <p className="text-sm text-muted-foreground py-4 text-center">
-              {(candidates?.items || []).length === 0
-                ? 'No candidates found. Create candidates on the Candidates page first.'
-                : 'All candidates are already assigned to this exam.'}
+              This exam is not linked to a batch. Create tests from Create Test to auto-link a batch.
             </p>
           )}
-          {!loading && available.map((c: {
-            id: string;
-            registrationNumber: string;
-            user: { firstName: string; lastName: string; email: string };
-          }) => (
+          {!loading && linkedBatch && !batchStudents.length && (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No students in {linkedBatch.name}. Enroll students on Classes &amp; Batches first.
+            </p>
+          )}
+          {!loading && batchStudents.map((s) => (
             <label
-              key={c.id}
+              key={s.candidateId}
               className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5"
             >
               <input
                 type="checkbox"
-                checked={selected.has(c.id)}
-                onChange={() => toggle(c.id)}
+                checked={selected.has(s.candidateId)}
+                onChange={() => toggle(s.candidateId)}
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{c.user.firstName} {c.user.lastName}</p>
-                <p className="text-xs text-muted-foreground">{c.registrationNumber} · {c.user.email}</p>
+                <p className="text-sm font-medium">{s.firstName} {s.lastName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {s.registrationNumber}
+                  {s.rollNumber ? ` · Roll ${s.rollNumber}` : ''}
+                </p>
               </div>
             </label>
           ))}
@@ -131,10 +186,10 @@ export function ExamAssignCandidatesDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
-            onClick={() => assignMutation.mutate()}
-            disabled={!selected.size || assignMutation.isPending}
+            onClick={() => saveMutation.mutate()}
+            disabled={!linkedBatch || saveMutation.isPending}
           >
-            {assignMutation.isPending ? 'Assigning...' : `Assign ${selected.size || ''} candidate${selected.size === 1 ? '' : 's'}`}
+            {saveMutation.isPending ? 'Saving…' : `Save (${selected.size} student${selected.size === 1 ? '' : 's'})`}
           </Button>
         </DialogFooter>
       </DialogContent>

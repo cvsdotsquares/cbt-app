@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Param, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AiService } from './ai.service';
+import { AiTestsService } from './ai-tests.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -12,7 +13,10 @@ import { Permission } from '@cbt/shared';
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class AiController {
-  constructor(private aiService: AiService) {}
+  constructor(
+    private aiService: AiService,
+    private aiTestsService: AiTestsService,
+  ) {}
 
   @Get('status')
   @RequirePermissions(Permission.QUESTION_CREATE)
@@ -60,5 +64,70 @@ export class AiController {
   @ApiOperation({ summary: 'Analyze proctoring frame with AI' })
   analyzeFrame(@Body() body: { sessionId: string; thumbnail: string }) {
     return this.aiService.processProctoringFrame(body.sessionId, body.thumbnail);
+  }
+
+  @Post('rag/generate')
+  @RequirePermissions(Permission.AI_GENERATE_TEST)
+  @ApiOperation({ summary: 'Generate RAG-grounded NCERT questions' })
+  generateRagQuestions(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: {
+      subjectId: string;
+      batchId?: string;
+      chapterIds?: string[];
+      topicIds?: string[];
+      syllabusScope?: string;
+      count?: number;
+      difficulty?: string;
+      types?: string[];
+      query?: string;
+    },
+  ) {
+    return this.aiTestsService.generateRagQuestions({
+      tenantId,
+      userId,
+      subjectId: body.subjectId,
+      batchId: body.batchId,
+      chapterIds: body.chapterIds,
+      topicIds: body.topicIds,
+      syllabusScope: body.syllabusScope as never,
+      count: Math.min(body.count || 10, 20),
+      difficulty: body.difficulty,
+      types: body.types,
+      query: body.query,
+    });
+  }
+
+  @Post('tests/create')
+  @RequirePermissions(Permission.AI_GENERATE_TEST)
+  @ApiOperation({ summary: 'Create AI-generated test exam' })
+  createAiTest(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: {
+      title: string;
+      batchId?: string;
+      subjectId?: string;
+      allSubjects?: boolean;
+      chapterIds?: string[];
+      topicIds?: string[];
+      questionCount?: number;
+      questionsPerSubject?: number;
+      difficulty?: string;
+      questionTypes?: string[];
+      syllabusScope?: string;
+      durationMinutes?: number;
+      assignToBatch?: boolean;
+    },
+  ) {
+    return this.aiTestsService.createAiTest(tenantId, userId, body);
+  }
+
+  @Post('explain')
+  @RequirePermissions(Permission.EXAM_VIEW_RESPONSE)
+  @ApiOperation({ summary: 'Generate AI explanation for an answer' })
+  explain(@Body() body: { questionText: string; correctAnswer: string; chapterId?: string }) {
+    return this.aiTestsService.generateExplanation(body.questionText, body.correctAnswer);
   }
 }

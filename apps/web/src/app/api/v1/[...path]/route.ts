@@ -7,22 +7,29 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]) {
   const path = pathSegments.join('/');
   const targetUrl = `${API_BASE}/api/v1/${path}${req.nextUrl.search}`;
 
+  const contentType = req.headers.get('content-type') || '';
+  const isMultipart = contentType.includes('multipart/form-data');
+
   const headers = new Headers();
   req.headers.forEach((value, key) => {
     const lower = key.toLowerCase();
-    if (lower === 'host' || lower === 'connection' || lower === 'content-length') return;
+    if (lower === 'host' || lower === 'connection') return;
+    // Let fetch compute content-length for multipart/binary bodies
+    if (lower === 'content-length' && isMultipart) return;
     headers.set(key, value);
   });
 
-  const body =
-    req.method !== 'GET' && req.method !== 'HEAD' ? await req.text() : undefined;
+  let requestBody: BodyInit | undefined;
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    requestBody = isMultipart ? await req.arrayBuffer() : await req.text();
+  }
 
   let upstream: Response;
   try {
     upstream = await fetchWithColdStartRetry(targetUrl, {
       method: req.method,
       headers,
-      body,
+      body: requestBody,
     });
   } catch {
     return NextResponse.json(
@@ -32,10 +39,19 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]) {
   }
 
   const responseHeaders = new Headers();
-  const contentType = upstream.headers.get('content-type');
-  if (contentType) responseHeaders.set('content-type', contentType);
+  const upstreamContentType = upstream.headers.get('content-type');
+  if (upstreamContentType) responseHeaders.set('content-type', upstreamContentType);
+  const disposition = upstream.headers.get('content-disposition');
+  if (disposition) responseHeaders.set('content-disposition', disposition);
 
-  return new NextResponse(await upstream.text(), {
+  const isBinary = upstreamContentType?.includes('application/pdf')
+    || upstreamContentType?.includes('octet-stream')
+    || disposition?.includes('inline')
+    || disposition?.includes('attachment');
+
+  const responseBody = isBinary ? await upstream.arrayBuffer() : await upstream.text();
+
+  return new NextResponse(responseBody, {
     status: upstream.status,
     headers: responseHeaders,
   });

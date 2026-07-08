@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { Role, Permission, ROLE_PERMISSIONS } from '@cbt/shared';
+import { seedNcertCurriculum, seedDemoBatch } from './ncert-seed';
 
 const prisma = new PrismaClient();
 
@@ -102,7 +103,24 @@ async function main() {
     },
   });
 
-  await syncUserRoles(candidateUser.id, [Role.CANDIDATE]);
+  await syncUserRoles(candidateUser.id, [Role.STUDENT, Role.CANDIDATE]);
+
+  const teacherRole = await prisma.role.findUnique({ where: { name: Role.TEACHER } });
+  const teacherUser = await prisma.user.upsert({
+    where: { tenantId_email: { tenantId: tenant.id, email: 'teacher@example.com' } },
+    update: { status: 'ACTIVE' },
+    create: {
+      tenantId: tenant.id,
+      email: 'teacher@example.com',
+      passwordHash: await bcrypt.hash('Teacher@123', 12),
+      firstName: 'Demo',
+      lastName: 'Teacher',
+      status: 'ACTIVE',
+      emailVerified: true,
+      userRoles: teacherRole ? { create: { roleId: teacherRole.id } } : undefined,
+    },
+  });
+  await syncUserRoles(teacherUser.id, [Role.TEACHER]);
 
   const candidate = await prisma.candidate.upsert({
     where: { userId: candidateUser.id },
@@ -253,9 +271,13 @@ async function main() {
     });
   }
 
+  await seedNcertCurriculum(prisma, tenant.id);
+  await seedDemoBatch(prisma, tenant.id, candidate.id);
+
   console.log('Seed completed successfully');
   console.log('Admin: admin@cbt-platform.com / Admin@123');
-  console.log('Candidate: candidate@example.com / Candidate@123');
+  console.log('Teacher: teacher@example.com / Teacher@123');
+  console.log('Student: candidate@example.com / Candidate@123');
   console.log(`Demo exam: ${exam.code} (${exam.title})`);
 }
 

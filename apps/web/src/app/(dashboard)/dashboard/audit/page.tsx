@@ -31,12 +31,12 @@ export default function AuditPage() {
           <table className="w-full text-sm">
             <thead><tr className="border-b bg-muted/50"><th className="p-3 text-left">Time</th><th className="p-3 text-left">User</th><th className="p-3 text-left">Action</th><th className="p-3 text-left">Resource</th><th className="p-3 text-left">IP</th></tr></thead>
             <tbody>
-              {(data?.items || []).map((log: { id: string; action: string; resourceType: string; ipAddress?: string; createdAt: string; user?: { email: string } }) => (
+              {(data?.items || []).map((log) => (
                 <tr key={log.id} className="border-b">
                   <td className="p-3">{new Date(log.createdAt).toLocaleString()}</td>
                   <td className="p-3">{log.user?.email || 'System'}</td>
                   <td className="p-3 font-mono text-xs">{log.action}</td>
-                  <td className="p-3">{log.resourceType}</td>
+                  <td className="p-3">{log.resourceType ?? log.entityType ?? '—'}</td>
                   <td className="p-3">{log.ipAddress || '-'}</td>
                 </tr>
               ))}

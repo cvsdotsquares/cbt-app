@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,6 +17,7 @@ import { useCameraProctoring } from '@/hooks/use-camera-proctoring';
 import { CameraPreview } from '@/components/proctoring/camera-preview';
 import { QuestionInput } from '@/components/exam/question-input';
 import type { ExamSecurityPolicy } from '@cbt/shared';
+import { normalizeSecurityPolicy, exitDocumentFullscreen, isFullscreenActive } from '@/lib/exam-security-policy';
 import { AlertTriangle, Shield, Wifi, WifiOff, Check, Loader2 } from 'lucide-react';
 
 interface Question {
@@ -58,7 +59,9 @@ export default function ExamStartPage() {
 
   const examSocket = useExamSocket(session?.sessionId ?? null, !!session && !done);
 
-  const securityPolicy = (session?.exam?.securityPolicy ?? { fullscreen: true, blockCopyPaste: true, blockRightClick: true, proctoringEnabled: true }) as ExamSecurityPolicy;
+  const securityPolicy = normalizeSecurityPolicy(
+    session?.exam?.securityPolicy as Partial<ExamSecurityPolicy> & { fullscreenRequired?: boolean },
+  );
   const proctoringEnabled = securityPolicy.proctoringEnabled !== false;
 
   const camera = useCameraProctoring({
@@ -73,6 +76,13 @@ export default function ExamStartPage() {
     candidateLabel: `${user?.firstName} ${user?.lastName}`,
     enabled: !!session && !done,
   });
+
+  const fullscreenRequired = securityPolicy.fullscreen !== false;
+
+  useLayoutEffect(() => {
+    if (!securityReady || !session || done || !fullscreenRequired) return;
+    if (isFullscreenActive()) void enterFullscreen();
+  }, [securityReady, session, done, fullscreenRequired, enterFullscreen]);
 
   useEffect(() => {
     if (!ready || !accessToken) return;
@@ -151,7 +161,7 @@ export default function ExamStartPage() {
   const finishExam = useCallback((result: { totalScore: number; maxScore: number; percentage: number }) => {
     setResult(result);
     setDone(true);
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    if (isFullscreenActive()) void exitDocumentFullscreen();
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -216,7 +226,6 @@ export default function ExamStartPage() {
   );
   if (!session || !securityReady) return <div className="flex min-h-screen items-center justify-center">Initializing secure exam environment...</div>;
 
-  const fullscreenRequired = securityPolicy.fullscreen !== false;
   if (fullscreenRequired && !isFullscreen) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">

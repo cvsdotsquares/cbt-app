@@ -106,6 +106,98 @@ export type ExamListItem = {
   title: string;
   code: string;
   status: string;
+  startTime: string;
+  endTime: string;
+  timezone?: string;
+  sections?: { id: string; _count?: { questions: number } }[];
+  aiTestConfig?: {
+    batch?: {
+      id: string;
+      name: string;
+      academicYear: string;
+      academicClass: { id: string; name: string; level: number };
+    } | null;
+  } | null;
+  _count?: { registrations: number; sessions: number; results: number };
+};
+
+export type ExamDetail = Omit<ExamListItem, 'sections'> & {
+  registrations?: { candidateId: string }[];
+  aiTestConfig?: {
+    batchId?: string | null;
+    batch?: {
+      id: string;
+      name: string;
+      academicYear: string;
+      academicClass: { id: string; name: string; level: number };
+    } | null;
+  } | null;
+  sections?: {
+    id: string;
+    name?: string;
+    _count?: { questions: number };
+    questions?: {
+      questionId: string;
+      question: {
+        title?: string;
+        type: string;
+        status: string;
+        versions?: {
+          content?: { text?: string };
+          options?: Record<string, string>;
+          correctAnswer?: { value?: string | string[] };
+          marks?: number;
+          negativeMarks?: number;
+        }[];
+      };
+    }[];
+  }[];
+};
+
+export type CandidateListItem = {
+  id: string;
+  registrationNumber: string;
+  kycStatus?: string;
+  createdAt?: string;
+  user: { firstName: string; lastName: string; email: string; status?: string };
+  batchEnrollments?: {
+    id: string;
+    rollNumber?: string | null;
+    batch: {
+      id: string;
+      name: string;
+      academicYear: string;
+      academicClass: { id: string; name: string; level: number };
+    };
+  }[];
+};
+
+export type QuestionListItem = {
+  id: string;
+  title: string | null;
+  type: string;
+  difficulty: string;
+  status: string;
+  versions?: { content?: { text?: string } }[];
+};
+
+export type AuditLogItem = {
+  id: string;
+  action: string;
+  entityType?: string;
+  resourceType?: string;
+  entityId?: string;
+  ipAddress?: string;
+  createdAt: string;
+  user?: { firstName?: string; lastName?: string; email: string };
+};
+
+export type ExamAnalytics = {
+  registered: number;
+  submitted: number;
+  violations: number;
+  completionRate: number;
+  averageScore: number;
 };
 
 export type ExamResultListItem = {
@@ -253,20 +345,26 @@ export const examsApi = {
       `/exams?page=${page}&limit=20${search ? `&search=${encodeURIComponent(search)}` : ''}`,
       authHeaders(token),
     ),
-  get: (token: string, id: string) => apiFetch(`/exams/${id}`, authHeaders(token)),
+  get: (token: string, id: string) => apiFetch<ExamDetail>(`/exams/${id}`, authHeaders(token)),
   instructions: (token: string, id: string) => apiFetch(`/exams/${id}/instructions`, authHeaders(token)),
   create: (token: string, body: unknown) =>
     apiFetch('/exams', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
   publish: (token: string, id: string) =>
     apiFetch(`/exams/${id}/publish`, { method: 'POST', ...authHeaders(token) }),
   assignCandidates: (token: string, id: string, candidateIds: string[]) =>
-    apiFetch(`/exams/${id}/candidates`, {
+    apiFetch<{ count?: number; skipped?: number }>(`/exams/${id}/candidates`, {
       method: 'POST',
       body: JSON.stringify({ candidateIds }),
       ...authHeaders(token),
     }),
+  syncCandidates: (token: string, id: string, candidateIds: string[]) =>
+    apiFetch<{ assigned?: number; added?: number; removed?: number }>(`/exams/${id}/candidates`, {
+      method: 'PUT',
+      body: JSON.stringify({ candidateIds }),
+      ...authHeaders(token),
+    }),
   addQuestions: (token: string, id: string, sectionId: string, questionIds: string[]) =>
-    apiFetch(`/exams/${id}/questions`, {
+    apiFetch<{ added?: number; skipped?: number }>(`/exams/${id}/questions`, {
       method: 'POST',
       body: JSON.stringify({ sectionId, questionIds }),
       ...authHeaders(token),
@@ -290,10 +388,14 @@ export const questionsApi = {
     if (filters.search) params.set('search', filters.search);
     if (filters.type) params.set('type', filters.type);
     if (filters.status) params.set('status', filters.status);
-    return apiFetch(`/questions?${params}`, authHeaders(token));
+    return apiFetch<Paginated<QuestionListItem>>(`/questions?${params}`, authHeaders(token));
   },
   create: (token: string, body: unknown) =>
     apiFetch('/questions', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  get: (token: string, id: string) =>
+    apiFetch<QuestionListItem>(`/questions/${id}`, authHeaders(token)),
+  update: (token: string, id: string, body: unknown) =>
+    apiFetch(`/questions/${id}`, { method: 'PATCH', body: JSON.stringify(body), ...authHeaders(token) }),
   approve: (token: string, id: string) =>
     apiFetch(`/questions/${id}/approve`, { method: 'POST', ...authHeaders(token) }),
   remove: (token: string, id: string) =>
@@ -301,9 +403,29 @@ export const questionsApi = {
 };
 
 export const candidatesApi = {
-  list: (token: string, page = 1, search = '', limit = 20) =>
-    apiFetch(`/candidates?page=${page}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`, authHeaders(token)),
-  create: (token: string, body: { email: string; password: string; firstName: string; lastName: string; registrationNumber?: string }) =>
+  list: (
+    token: string,
+    page = 1,
+    search = '',
+    limit = 20,
+    filters?: { batchId?: string; academicClassId?: string; unassigned?: boolean },
+  ) => {
+    const q = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (search) q.set('search', search);
+    if (filters?.batchId) q.set('batchId', filters.batchId);
+    if (filters?.academicClassId) q.set('academicClassId', filters.academicClassId);
+    if (filters?.unassigned) q.set('unassigned', 'true');
+    return apiFetch<Paginated<CandidateListItem>>(`/candidates?${q}`, authHeaders(token));
+  },
+  create: (token: string, body: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    registrationNumber?: string;
+    batchId?: string;
+    rollNumber?: string;
+  }) =>
     apiFetch('/candidates', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
   dashboard: (token: string) => apiFetch('/candidates/me/dashboard', authHeaders(token)),
   admitCard: (token: string, examId: string) =>
@@ -315,6 +437,22 @@ export const candidatesApi = {
       ...authHeaders(token),
     }),
   stats: (token: string) => apiFetch('/candidates/stats', authHeaders(token)),
+  update: (
+    token: string,
+    id: string,
+    body: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      registrationNumber?: string;
+      status?: string;
+      password?: string;
+    },
+  ) => apiFetch(`/candidates/${id}`, { method: 'PATCH', body: JSON.stringify(body), ...authHeaders(token) }),
+  remove: (token: string, id: string) =>
+    apiFetch(`/candidates/${id}`, { method: 'DELETE', ...authHeaders(token) }),
+  setBatch: (token: string, id: string, body: { batchId: string | null; rollNumber?: string }) =>
+    apiFetch(`/candidates/${id}/batch`, { method: 'PATCH', body: JSON.stringify(body), ...authHeaders(token) }),
   submitKyc: (token: string, body: { documentType: string; idNumber: string; fileName: string; fileData: string }) =>
     apiFetch('/candidates/me/kyc', {
       method: 'POST',
@@ -338,6 +476,19 @@ export const usersApi = {
     }),
   removeRole: (token: string, userId: string, roleId: string) =>
     apiFetch(`/users/${userId}/roles/${roleId}`, { method: 'DELETE', ...authHeaders(token) }),
+  update: (
+    token: string,
+    id: string,
+    body: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      status?: string;
+      password?: string;
+    },
+  ) => apiFetch(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body), ...authHeaders(token) }),
+  remove: (token: string, id: string) =>
+    apiFetch(`/users/${id}`, { method: 'DELETE', ...authHeaders(token) }),
 };
 
 export const resultsApi = {
@@ -428,24 +579,177 @@ export const proctoringApi = {
 
 export const auditApi = {
   list: (token: string, page = 1, limit = 20) =>
-    apiFetch(`/audit/logs?page=${page}&limit=${limit}`, authHeaders(token)),
+    apiFetch<Paginated<AuditLogItem>>(`/audit/logs?page=${page}&limit=${limit}`, authHeaders(token)),
 };
 
 export const analyticsApi = {
-  exam: (token: string, examId: string) => apiFetch(`/analytics/exam/${examId}`, authHeaders(token)),
+  exam: (token: string, examId: string) =>
+    apiFetch<ExamAnalytics>(`/analytics/exam/${examId}`, authHeaders(token)),
 };
 
 export const aiApi = {
   status: (token: string) => apiFetch('/ai/status', authHeaders(token)),
   generateQuestions: (token: string, body: { topic: string; count?: number; difficulty?: string; type?: string }) =>
     apiFetch('/ai/questions/generate', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  generateRagQuestions: (token: string, body: {
+    subjectId: string; batchId?: string; chapterIds?: string[];
+    topicIds?: string[]; syllabusScope?: string; count?: number;
+    difficulty?: string; types?: string[];
+  }) => apiFetch('/ai/rag/generate', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  createAiTest: (token: string, body: {
+    title: string; subjectId?: string; batchId?: string; allSubjects?: boolean;
+    chapterIds?: string[]; questionCount?: number; questionsPerSubject?: number;
+    difficulty?: string; questionTypes?: string[]; syllabusScope?: string;
+    durationMinutes?: number; assignToBatch?: boolean;
+  }) => apiFetch('/ai/tests/create', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  explain: (token: string, body: { questionText: string; correctAnswer: string }) =>
+    apiFetch('/ai/explain', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
   examInsights: (token: string, examId: string) =>
     apiFetch(`/ai/insights/exam/${examId}`, authHeaders(token)),
   chat: (token: string, message: string, context?: { page?: string }) =>
     apiFetch('/ai/chat', { method: 'POST', body: JSON.stringify({ message, context }), ...authHeaders(token) }),
 };
 
+export const curriculumApi = {
+  getClasses: (token: string, options?: { uploadedOnly?: boolean }) => {
+    const q = options?.uploadedOnly ? '?uploadedOnly=true' : '';
+    return apiFetch(`/curriculum/classes${q}`, authHeaders(token));
+  },
+  getClass: (token: string, id: string) => apiFetch(`/curriculum/classes/${id}`, authHeaders(token)),
+  getSubjectChapters: (token: string, subjectId: string) =>
+    apiFetch(`/curriculum/subjects/${subjectId}/chapters`, authHeaders(token)),
+};
+
+export const batchesApi = {
+  list: (token: string) => apiFetch('/batches', authHeaders(token)),
+  get: (token: string, id: string) => apiFetch(`/batches/${id}`, authHeaders(token)),
+  create: (token: string, body: { academicClassId: string; name: string; academicYear: string }) =>
+    apiFetch('/batches', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  update: (token: string, id: string, body: { academicClassId?: string; name?: string; academicYear?: string; isActive?: boolean }) =>
+    apiFetch(`/batches/${id}`, { method: 'PATCH', body: JSON.stringify(body), ...authHeaders(token) }),
+  remove: (token: string, id: string) =>
+    apiFetch(`/batches/${id}`, { method: 'DELETE', ...authHeaders(token) }),
+  enroll: (token: string, batchId: string, body: { candidateId: string; rollNumber?: string }) =>
+    apiFetch(`/batches/${batchId}/enroll`, { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  getSyllabusProgress: (token: string, batchId: string, subjectId?: string) =>
+    apiFetch(`/batches/${batchId}/syllabus-progress${subjectId ? `?subjectId=${subjectId}` : ''}`, authHeaders(token)),
+  updateSyllabusProgress: (token: string, batchId: string, body: { chapterId?: string; topicId?: string; status: string }) =>
+    apiFetch(`/batches/${batchId}/syllabus-progress`, { method: 'PATCH', body: JSON.stringify(body), ...authHeaders(token) }),
+};
+
+export const materialsApi = {
+  list: (token: string, params?: { chapterId?: string; type?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.chapterId) q.set('chapterId', params.chapterId);
+    if (params?.type) q.set('type', params.type);
+    return apiFetch(`/materials?${q}`, authHeaders(token));
+  },
+  upload: async (token: string, formData: FormData) => {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      'X-Tenant-ID': getAuthTenantId(),
+      'X-Device-Fingerprint': getFingerprint(),
+    };
+    const requestUrl = `${getApiUrl()}/materials/upload`;
+    const useColdStartRetry = typeof window !== 'undefined' && !isLocalDevHost();
+
+    let res = useColdStartRetry
+      ? await fetchWithColdStartRetry(requestUrl, { method: 'POST', headers, body: formData })
+      : await fetch(requestUrl, { method: 'POST', headers, body: formData });
+
+    if (res.status === 401) {
+      if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
+      const newToken = await refreshPromise;
+      if (newToken) {
+        headers.Authorization = `Bearer ${newToken}`;
+        res = useColdStartRetry
+          ? await fetchWithColdStartRetry(requestUrl, { method: 'POST', headers, body: formData })
+          : await fetch(requestUrl, { method: 'POST', headers, body: formData });
+      }
+    }
+
+    const raw = await res.text();
+    let data: unknown;
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      throw new Error(formatNonJsonError(raw, res.ok));
+    }
+    if (!res.ok) throw new Error(formatApiError(data));
+    return (data as { data?: unknown }).data ?? data;
+  },
+  reindex: (token: string, id: string) =>
+    apiFetch(`/materials/${id}/reindex`, { method: 'POST', ...authHeaders(token) }),
+  delete: (token: string, id: string) =>
+    apiFetch(`/materials/${id}`, { method: 'DELETE', ...authHeaders(token) }),
+  openFile: async (token: string, id: string) => {
+    const url = `${getApiUrl()}/materials/${id}/file`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Tenant-ID': getAuthTenantId(),
+        'X-Device-Fingerprint': getFingerprint(),
+      },
+    });
+    if (!res.ok) {
+      const raw = await res.text();
+      let message = 'Could not open file';
+      try {
+        message = formatApiError(JSON.parse(raw));
+      } catch {
+        if (raw && !raw.trimStart().startsWith('{')) message = raw;
+      }
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    window.open(objectUrl, '_blank', 'noopener,noreferrer');
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  },
+  downloadFile: async (token: string, id: string, fileName: string) => {
+    const url = `${getApiUrl()}/materials/${id}/file?download=1`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Tenant-ID': getAuthTenantId(),
+        'X-Device-Fingerprint': getFingerprint(),
+      },
+    });
+    if (!res.ok) {
+      const raw = await res.text();
+      let message = 'Could not download file';
+      try {
+        message = formatApiError(JSON.parse(raw));
+      } catch {
+        if (raw && !raw.trimStart().startsWith('{')) message = raw;
+      }
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+  },
+};
+
+export const learningApi = {
+  studentDashboard: (token: string) => apiFetch('/learning/student/dashboard', authHeaders(token)),
+  recommendations: (token: string) => apiFetch('/learning/student/recommendations', authHeaders(token)),
+  teacherAnalytics: (token: string, batchId: string, subjectId?: string) =>
+    apiFetch(`/learning/teacher/batch/${batchId}/analytics${subjectId ? `?subjectId=${subjectId}` : ''}`, authHeaders(token)),
+};
+
+export const onboardingApi = {
+  setupStatus: (token: string) => apiFetch('/onboarding/setup-status', authHeaders(token)),
+};
+
 export const tenantsApi = {
+  list: (token: string, page = 1) => apiFetch(`/tenants?page=${page}`, authHeaders(token)),
+  create: (token: string, body: { name: string; slug: string; domain?: string }) =>
+    apiFetch('/tenants', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
   get: (token: string, id: string) => apiFetch(`/tenants/${id}`, authHeaders(token)),
   updateBranding: (token: string, id: string, branding: unknown) =>
     apiFetch(`/tenants/${id}/branding`, {

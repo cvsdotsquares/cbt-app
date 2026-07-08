@@ -49,15 +49,15 @@ export default function AnalyticsPage() {
         </select>
       </PageHeader>
 
-      {analytics && (
+      {analytics ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard title="Registered" value={(analytics as { registered: number }).registered} icon={Users} accent="blue" />
-          <StatCard title="Submitted" value={(analytics as { submitted: number }).submitted} icon={CheckCircle2} accent="green" />
-          <StatCard title="Violations" value={(analytics as { violations: number }).violations} icon={AlertTriangle} accent="red" />
-          <StatCard title="Completion" value={`${(analytics as { completionRate: number }).completionRate}%`} icon={TrendingUp} accent="violet" />
-          <StatCard title="Avg Score" value={`${((analytics as { averageScore: number }).averageScore)?.toFixed?.(1) ?? 0}%`} icon={Brain} accent="amber" />
+          <StatCard title="Registered" value={analytics.registered} icon={Users} accent="blue" />
+          <StatCard title="Submitted" value={analytics.submitted} icon={CheckCircle2} accent="green" />
+          <StatCard title="Violations" value={analytics.violations} icon={AlertTriangle} accent="red" />
+          <StatCard title="Completion" value={`${analytics.completionRate}%`} icon={TrendingUp} accent="violet" />
+          <StatCard title="Avg Score" value={`${analytics.averageScore?.toFixed?.(1) ?? 0}%`} icon={Brain} accent="amber" />
         </div>
-      )}
+      ) : null}
 
       {insightData && (
         <Card className="surface-card border-primary/20">

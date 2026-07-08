@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { examsApi, resultsApi, candidatesApi, authApi } from '@/lib/api';
+import { examsApi, resultsApi, candidatesApi, authApi, learningApi } from '@/lib/api';
 import { useRequireCandidate } from '@/hooks/use-auth';
 import { useAuthStore } from '@/stores/auth-store';
 import { isAdmin, normalizeRoles } from '@/lib/roles';
@@ -59,7 +59,7 @@ type CandidateDashboard = {
   };
 };
 
-type Tab = 'exams' | 'results';
+type Tab = 'exams' | 'results' | 'progress';
 
 const KYC_VARIANTS: Record<string, 'success' | 'warning' | 'destructive' | 'outline'> = {
   VERIFIED: 'success',
@@ -105,6 +105,17 @@ export default function MyExamsPage() {
   const { data: dashboard } = useQuery({
     queryKey: ['candidate-dashboard'],
     queryFn: () => candidatesApi.dashboard(accessToken!) as Promise<CandidateDashboard>,
+    enabled: !!accessToken,
+  });
+
+  const { data: learning } = useQuery({
+    queryKey: ['student-learning'],
+    queryFn: () => learningApi.studentDashboard(accessToken!) as Promise<{
+      batches: { name: string; academicClass: { name: string } }[];
+      stats: { averageScore: number | null; weakTopics: number; masteredTopics: number };
+      weakAreas: { reason: string; topic: { title: string; chapter?: { title: string } } }[];
+      topicMasteries: { accuracy: number; topic: { title: string } }[];
+    }>,
     enabled: !!accessToken,
   });
 
@@ -200,9 +211,9 @@ export default function MyExamsPage() {
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-2">
               <p className="text-sm font-semibold text-primary">Good {greeting}, {user?.firstName}</p>
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Candidate Portal</h1>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Student Portal</h1>
               <p className="max-w-lg text-muted-foreground">
-                View assigned exams, download admit cards, and access your published results.
+                Take AI-generated practice tests, track your progress, and review chapter-wise performance.
               </p>
             </div>
             {profile && (
@@ -247,7 +258,7 @@ export default function MyExamsPage() {
           <div className="space-y-6 lg:col-span-2">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex gap-1 rounded-xl border border-border/60 bg-muted/30 p-1">
-                {(['exams', 'results'] as Tab[]).map((t) => (
+                {(['exams', 'results', 'progress'] as Tab[]).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -257,7 +268,7 @@ export default function MyExamsPage() {
                       tab === t ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
-                    {t === 'exams' ? `My Exams (${examList.length})` : `Results (${resultList.length})`}
+                    {t === 'exams' ? `My Tests (${examList.length})` : t === 'results' ? `Results (${resultList.length})` : 'Progress'}
                   </button>
                 ))}
               </div>
@@ -425,6 +436,82 @@ export default function MyExamsPage() {
                       icon={Award}
                       title="No results published yet"
                       description="Your exam scores will appear here once results are published by the administrator."
+                    />
+                  </Card>
+                )}
+              </section>
+            )}
+
+            {tab === 'progress' && (
+              <section className="space-y-4">
+                {learning?.batches?.length ? (
+                  <Card className="surface-card">
+                    <CardContent className="p-5">
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Your Batch</p>
+                      {learning.batches.map((b, i) => (
+                        <p key={i} className="font-semibold">{b.name} — {b.academicClass.name}</p>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <StatCard title="Mastered Topics" value={learning?.stats?.masteredTopics ?? 0} icon={CheckCircle2} accent="green" />
+                  <StatCard title="Weak Areas" value={learning?.stats?.weakTopics ?? 0} icon={AlertCircle} accent="amber" />
+                  <StatCard
+                    title="Avg. Score"
+                    value={learning?.stats?.averageScore != null ? `${learning.stats.averageScore.toFixed(1)}%` : '—'}
+                    icon={Award}
+                    accent="violet"
+                  />
+                </div>
+
+                {learning?.weakAreas?.length ? (
+                  <Card className="surface-card border-destructive/20">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base text-destructive">Revision Recommended</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {learning.weakAreas.map((w, i) => (
+                        <div key={i} className="rounded-lg bg-destructive/5 px-4 py-3 text-sm">
+                          <p className="font-medium">{w.topic.title}</p>
+                          <p className="text-muted-foreground">{w.reason}</p>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                {learning?.topicMasteries?.length ? (
+                  <Card className="surface-card">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">Topic Mastery</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {learning.topicMasteries.map((m, i) => (
+                        <div key={i} className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span>{m.topic.title}</span>
+                            <span className={m.accuracy >= 70 ? 'text-emerald-600' : 'text-amber-600'}>
+                              {m.accuracy.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${m.accuracy >= 70 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                              style={{ width: `${m.accuracy}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="surface-card">
+                    <EmptyState
+                      icon={BookOpen}
+                      title="Start practicing"
+                      description="Complete AI-generated tests to build your topic mastery profile."
                     />
                   </Card>
                 )}

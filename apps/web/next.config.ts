@@ -4,7 +4,7 @@ import path from 'path';
 const nextConfig: NextConfig = {
   transpilePackages: ['@cbt/shared'],
   eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
+  typescript: { ignoreBuildErrors: false },
   outputFileTracingRoot: path.join(__dirname, '../..'),
   images: {
     remotePatterns: [

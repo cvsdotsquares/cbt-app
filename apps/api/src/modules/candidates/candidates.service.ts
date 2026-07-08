@@ -7,27 +7,56 @@ import { parsePage, parseLimit } from '../../common/utils/pagination.util';
 const BCRYPT_ROUNDS = 12;
 
 @Injectable()
-export class CandidatesService {  constructor(private prisma: PrismaService) {}
+export class CandidatesService {
+  constructor(private prisma: PrismaService) {}
 
-  async findAll(tenantId: string, page?: unknown, limit?: unknown, search?: string) {
+  async findAll(
+    tenantId: string,
+    page?: unknown,
+    limit?: unknown,
+    search?: string,
+    filters?: { batchId?: string; academicClassId?: string; unassigned?: boolean },
+  ) {
     const p = parsePage(page);
     const l = parseLimit(limit);
     const where = {
       tenantId,
       ...(search && {
         OR: [
-          { registrationNumber: { contains: search } },
-          { user: { email: { contains: search } } },
-          { user: { firstName: { contains: search } } },
-          { user: { lastName: { contains: search } } },
+          { registrationNumber: { contains: search, mode: 'insensitive' as const } },
+          { user: { email: { contains: search, mode: 'insensitive' as const } } },
+          { user: { firstName: { contains: search, mode: 'insensitive' as const } } },
+          { user: { lastName: { contains: search, mode: 'insensitive' as const } } },
         ],
+      }),
+      ...(filters?.batchId && {
+        batchEnrollments: { some: { batchId: filters.batchId } },
+      }),
+      ...(filters?.academicClassId && {
+        batchEnrollments: {
+          some: { batch: { academicClassId: filters.academicClassId } },
+        },
+      }),
+      ...(filters?.unassigned && {
+        batchEnrollments: { none: {} },
       }),
     };
     const [items, total] = await Promise.all([
       this.prisma.candidate.findMany({
         where,
         include: {
-          user: { select: { email: true, firstName: true, lastName: true, status: true } },
+          user: { select: { id: true, email: true, firstName: true, lastName: true, status: true } },
+          batchEnrollments: {
+            orderBy: { enrolledAt: 'desc' },
+            take: 1,
+            include: {
+              batch: {
+                include: {
+                  academicClass: { select: { id: true, name: true, level: true } },
+                },
+              },
+            },
+          },
         },
         skip: (p - 1) * l,
         take: l,
@@ -104,7 +133,15 @@ export class CandidatesService {  constructor(private prisma: PrismaService) {}
 
   async create(
     tenantId: string,
-    data: { email: string; password: string; firstName: string; lastName: string; registrationNumber?: string },
+    data: {
+      email: string;
+      password: string;
+      firstName: string;
+      lastName: string;
+      registrationNumber?: string;
+      batchId?: string;
+      rollNumber?: string;
+    },
   ) {
     const existing = await this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId, email: data.email } },
@@ -122,7 +159,14 @@ export class CandidatesService {  constructor(private prisma: PrismaService) {}
     });
     if (duplicateReg) throw new ConflictException('Registration number already exists');
 
-    return this.prisma.user.create({
+    if (data.batchId) {
+      const batch = await this.prisma.batch.findFirst({
+        where: { id: data.batchId, tenantId, isActive: true },
+      });
+      if (!batch) throw new BadRequestException('Batch not found');
+    }
+
+    const user = await this.prisma.user.create({
       data: {
         tenantId,
         email: data.email,
@@ -145,6 +189,18 @@ export class CandidatesService {  constructor(private prisma: PrismaService) {}
         userRoles: { include: { role: { select: { name: true } } } },
       },
     });
+
+    if (data.batchId && user.candidate) {
+      await this.prisma.batchEnrollment.create({
+        data: {
+          batchId: data.batchId,
+          candidateId: user.candidate.id,
+          rollNumber: data.rollNumber?.trim() || null,
+        },
+      });
+    }
+
+    return user;
   }
 
   async updateKyc(id: string, tenantId: string, status: 'VERIFIED' | 'REJECTED') {
@@ -157,6 +213,141 @@ export class CandidatesService {  constructor(private prisma: PrismaService) {}
         kycVerifiedAt: status === 'VERIFIED' ? new Date() : null,
       },
     });
+  }
+
+  async update(
+    id: string,
+    tenantId: string,
+    data: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      registrationNumber?: string;
+      status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
+      password?: string;
+    },
+  ) {
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id, tenantId },
+      include: { user: true },
+    });
+    if (!candidate) throw new NotFoundException('Student not found');
+
+    if (data.email && data.email !== candidate.user.email) {
+      const existing = await this.prisma.user.findUnique({
+        where: { tenantId_email: { tenantId, email: data.email.trim().toLowerCase() } },
+      });
+      if (existing) throw new ConflictException('Email already in use');
+    }
+
+    if (data.registrationNumber && data.registrationNumber !== candidate.registrationNumber) {
+      const dup = await this.prisma.candidate.findFirst({
+        where: { tenantId, registrationNumber: data.registrationNumber, id: { not: id } },
+      });
+      if (dup) throw new ConflictException('Registration number already exists');
+    }
+
+    const userData: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      status?: typeof data.status;
+      passwordHash?: string;
+    } = {};
+
+    if (data.firstName !== undefined) userData.firstName = data.firstName.trim();
+    if (data.lastName !== undefined) userData.lastName = data.lastName.trim();
+    if (data.email !== undefined) userData.email = data.email.trim().toLowerCase();
+    if (data.status !== undefined) userData.status = data.status;
+    if (data.password?.trim()) {
+      userData.passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
+    }
+
+    const [, updatedCandidate] = await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: candidate.userId }, data: userData }),
+      this.prisma.candidate.update({
+        where: { id },
+        data: data.registrationNumber !== undefined
+          ? { registrationNumber: data.registrationNumber.trim() }
+          : {},
+        include: {
+          user: { select: { id: true, email: true, firstName: true, lastName: true, status: true } },
+        },
+      }),
+    ]);
+
+    return updatedCandidate;
+  }
+
+  /** Assign student to a class batch (replaces any existing batch). Pass batchId null to unassign. */
+  async setBatchEnrollment(
+    id: string,
+    tenantId: string,
+    data: { batchId: string | null; rollNumber?: string },
+  ) {
+    const candidate = await this.prisma.candidate.findFirst({ where: { id, tenantId } });
+    if (!candidate) throw new NotFoundException('Student not found');
+
+    if (!data.batchId) {
+      await this.prisma.batchEnrollment.deleteMany({ where: { candidateId: id } });
+      return { batch: null };
+    }
+
+    const batch = await this.prisma.batch.findFirst({
+      where: { id: data.batchId, tenantId, isActive: true },
+      include: { academicClass: { select: { id: true, name: true, level: true } } },
+    });
+    if (!batch) throw new NotFoundException('Batch not found');
+
+    const rollNumber = data.rollNumber?.trim() || null;
+
+    await this.prisma.$transaction([
+      this.prisma.batchEnrollment.deleteMany({ where: { candidateId: id } }),
+      this.prisma.batchEnrollment.create({
+        data: { batchId: data.batchId, candidateId: id, rollNumber },
+      }),
+    ]);
+
+    return {
+      batch: {
+        id: batch.id,
+        name: batch.name,
+        academicYear: batch.academicYear,
+        academicClass: batch.academicClass,
+        rollNumber,
+      },
+    };
+  }
+
+  /** Deactivate a student who left the institute — keeps exam history, removes batch access. */
+  async remove(id: string, tenantId: string) {
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id, tenantId },
+      include: { user: { select: { id: true, firstName: true, lastName: true } } },
+    });
+    if (!candidate) throw new NotFoundException('Student not found');
+
+    const inProgress = await this.prisma.examSession.count({
+      where: { candidateId: id, status: 'IN_PROGRESS' },
+    });
+    if (inProgress > 0) {
+      throw new BadRequestException('Cannot remove a student while they have an exam in progress');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.session.deleteMany({ where: { userId: candidate.userId } }),
+      this.prisma.batchEnrollment.deleteMany({ where: { candidateId: id } }),
+      this.prisma.user.update({
+        where: { id: candidate.userId },
+        data: { status: 'INACTIVE' },
+      }),
+    ]);
+
+    return {
+      deactivated: true,
+      id: candidate.id,
+      name: `${candidate.user.firstName} ${candidate.user.lastName}`,
+    };
   }
 
   async getDashboardByUser(userId: string) {
