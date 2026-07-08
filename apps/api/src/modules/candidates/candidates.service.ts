@@ -3,6 +3,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { Role } from '@cbt/shared';
 import { parsePage, parseLimit } from '../../common/utils/pagination.util';
+import {
+  CANDIDATE_VISIBLE_EXAM_STATUSES,
+  assertExamVisibleToCandidate,
+} from '../../common/utils/exam-visibility.util';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -364,7 +368,12 @@ export class CandidatesService {
     if (!candidate) throw new NotFoundException('Candidate not found');
 
     const [examCount, sessionStats, results] = await Promise.all([
-      this.prisma.examRegistration.count({ where: { candidateId } }),
+      this.prisma.examRegistration.count({
+        where: {
+          candidateId,
+          exam: { status: { in: [...CANDIDATE_VISIBLE_EXAM_STATUSES] } },
+        },
+      }),
       this.prisma.examSession.groupBy({
         by: ['status'],
         where: { candidateId },
@@ -413,6 +422,7 @@ export class CandidatesService {
       include: { exam: true },
     });
     if (!registration) throw new NotFoundException('Not registered for this exam');
+    assertExamVisibleToCandidate(registration.exam.status);
 
     const admitCardUrl = registration.admitCardUrl
       || `/admit-cards/${registration.id}`;

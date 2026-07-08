@@ -95,7 +95,7 @@ export default function ExamInstructionsPage() {
             <CardContent className="p-4 text-sm text-amber-800 dark:text-amber-200">
               {status.phase === 'upcoming' && 'This exam is not open yet. Check the schedule above.'}
               {status.phase === 'ended' && 'The exam window has ended. You can no longer start this exam.'}
-              {status.phase === 'unavailable' && 'This exam is not available for taking right now.'}
+              {status.phase === 'unavailable' && 'This exam has not been published yet. Check back after your teacher publishes it.'}
             </CardContent>
           </Card>
         )}

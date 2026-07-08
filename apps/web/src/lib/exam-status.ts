@@ -34,7 +34,7 @@ export function getExamStatus(reg: ExamRegistration): ExamStatusInfo {
     return { label: 'Ended', variant: 'secondary', actionLabel: 'Ended', actionDisabled: true, phase: 'ended' };
   }
   if (!['PUBLISHED', 'IN_PROGRESS'].includes(reg.exam.status)) {
-    return { label: 'Unavailable', variant: 'secondary', actionLabel: 'Unavailable', actionDisabled: true, phase: 'unavailable' };
+    return { label: 'Not Published', variant: 'secondary', actionLabel: 'Not Published', actionDisabled: true, phase: 'unavailable' };
   }
   return { label: 'Available Now', variant: 'success', actionLabel: 'Start Exam', actionDisabled: false, phase: 'available' };
 }

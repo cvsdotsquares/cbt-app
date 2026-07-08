@@ -4,6 +4,10 @@ import { ExamType } from '@prisma/client';
 import { DEFAULT_EXAM_TIMEZONE, parseExamDateTime } from '@cbt/shared';
 import { resolveCandidateId } from '../../common/utils/candidate.util';
 import { parsePage, parseLimit } from '../../common/utils/pagination.util';
+import {
+  CANDIDATE_VISIBLE_EXAM_STATUSES,
+  assertExamVisibleToCandidate,
+} from '../../common/utils/exam-visibility.util';
 @Injectable()
 export class ExamsService {
   constructor(private prisma: PrismaService) {}
@@ -357,7 +361,10 @@ export class ExamsService {
   async getAvailableForCandidate(userId: string) {
     const candidateId = await resolveCandidateId(this.prisma, userId);
     return this.prisma.examRegistration.findMany({
-      where: { candidateId },
+      where: {
+        candidateId,
+        exam: { status: { in: [...CANDIDATE_VISIBLE_EXAM_STATUSES] } },
+      },
       include: {
         exam: true,
         sessions: {
@@ -399,6 +406,7 @@ export class ExamsService {
       },
     });
     if (!registration) throw new NotFoundException('Not registered for this exam');
+    assertExamVisibleToCandidate(registration.exam.status);
 
     return {
       ...registration.exam,

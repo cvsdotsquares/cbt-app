@@ -61,6 +61,8 @@ const DOC_TYPES = [
   { value: 'QUESTION_BANK', label: 'Question Bank' },
 ];
 
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -118,10 +120,20 @@ export default function MaterialsPage() {
   const addPendingFiles = (incoming: FileList | File[]) => {
     const next = Array.from(incoming);
     if (!next.length) return;
+    const tooLarge = next.filter((f) => f.size > MAX_UPLOAD_BYTES);
+    if (tooLarge.length) {
+      toast({
+        title: 'File too large',
+        description: `${tooLarge.map((f) => f.name).join(', ')} exceeds the 100 MB limit.`,
+        variant: 'destructive',
+      });
+    }
+    const accepted = next.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+    if (!accepted.length) return;
     setPendingFiles((prev) => {
       const seen = new Set(prev.map((f) => `${f.name}:${f.size}:${f.lastModified}`));
       const merged = [...prev];
-      for (const file of next) {
+      for (const file of accepted) {
         const key = `${file.name}:${file.size}:${file.lastModified}`;
         if (!seen.has(key)) {
           seen.add(key);
@@ -130,8 +142,8 @@ export default function MaterialsPage() {
       }
       return merged;
     });
-    if (next.length === 1) {
-      setMeta((m) => ({ ...m, title: next[0].name.replace(/\.[^.]+$/, '') }));
+    if (accepted.length === 1) {
+      setMeta((m) => ({ ...m, title: accepted[0].name.replace(/\.[^.]+$/, '') }));
     }
   };
 
@@ -301,7 +313,7 @@ export default function MaterialsPage() {
               <>
                 <BookOpen className="mx-auto h-8 w-8 text-muted-foreground" />
                 <p className="mt-2 font-medium">Choose PDF or text files</p>
-                <p className="text-sm text-muted-foreground">Select multiple files · Max 50 MB each</p>
+                <p className="text-sm text-muted-foreground">Select multiple files · Max 100 MB each</p>
               </>
             )}
             <input

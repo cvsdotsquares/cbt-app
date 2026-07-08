@@ -13,9 +13,12 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Permission } from '@cbt/shared';
 import { MaterialType } from '@prisma/client';
 
+/** Full NCERT textbooks can exceed 50 MB; allow up to 100 MB per file. */
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
 const uploadInterceptor = FileInterceptor('file', {
   storage: memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: MAX_UPLOAD_BYTES },
   fileFilter: (_req, file, cb) => {
     const allowed = [
       'application/pdf',
