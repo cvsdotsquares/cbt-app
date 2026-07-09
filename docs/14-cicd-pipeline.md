@@ -1,266 +1,78 @@
 # 14. CI/CD Pipeline
 
-## Pipeline Overview
+## Overview
 
-```mermaid
-flowchart LR
-    subgraph Trigger
-        PR[Pull Request]
-        MERGE[Merge to main]
-        TAG[Release Tag]
-    end
+| Layer | Tooling | Notes |
+|-------|---------|--------|
+| **CI** | GitHub Actions [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, typecheck, unit/e2e tests, build |
+| **CD** | GitHub Actions + SSH → company server | **No Docker** — see [SERVER-DEPLOY.md](./SERVER-DEPLOY.md) |
 
-    subgraph CI["CI Pipeline"]
-        LINT[Lint & Format]
-        TYPE[Type Check]
-        UNIT[Unit Tests]
-        INT[Integration Tests]
-        BUILD[Build]
-        SCAN[Security Scan]
-        DOCKER[Docker Build]
-    end
+Legacy AWS/EKS/Docker sketches below are superseded by the company-server path unless you explicitly switch back.
 
-    subgraph CD_Staging["CD Staging"]
-        PUSH_S[Push to ECR]
-        DEPLOY_S[Deploy to Staging]
-        E2E[E2E Tests]
-        SMOKE[Smoke Tests]
-    end
-
-    subgraph CD_Prod["CD Production"]
-        APPROVE[Manual Approval]
-        PUSH_P[Push to ECR]
-        DEPLOY_P[Rolling Deploy]
-        VERIFY[Health Check]
-        ROLLBACK[Auto Rollback]
-    end
-
-    PR --> LINT --> TYPE --> UNIT --> INT --> BUILD --> SCAN
-    MERGE --> DOCKER --> PUSH_S --> DEPLOY_S --> E2E --> SMOKE
-    TAG --> APPROVE --> PUSH_P --> DEPLOY_P --> VERIFY
-    VERIFY -->|Fail| ROLLBACK
-```
-
-## GitHub Actions Workflows
-
-### CI Pipeline (`ci.yml`)
-
-```yaml
-name: CI
-
-on:
-  pull_request:
-    branches: [main, develop]
-  push:
-    branches: [main, develop]
-
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm exec prettier --check .
-
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec tsc --noEmit -p apps/api
-      - run: pnpm exec tsc --noEmit -p apps/web
-      - run: pnpm exec tsc --noEmit -p packages/shared
-
-  test:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: cbt_test
-        ports: ['5432:5432']
-      redis:
-        image: redis:7
-        ports: ['6379:6379']
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @cbt/api prisma:generate
-      - run: pnpm test
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/cbt_test
-          REDIS_URL: redis://localhost:6379
-          JWT_ACCESS_SECRET: test-access-secret-min-32-characters
-          JWT_REFRESH_SECRET: test-refresh-secret-min-32-characters
-
-  security:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - run: pnpm install --frozen-lockfile
-      - name: Dependency audit
-        run: pnpm audit --audit-level=high
-      - name: SAST scan
-        uses: github/codeql-action/analyze@v3
-        with:
-          languages: typescript
-
-  build:
-    needs: [lint, typecheck, test, security]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-```
-
-### CD Staging (`cd-staging.yml`)
-
-```yaml
-name: Deploy Staging
-
-on:
-  push:
-    branches: [develop]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-south-1
-
-      - name: Login to ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push API
-        run: |
-          docker build -t $ECR_REGISTRY/cbt-api:$GITHUB_SHA -f apps/api/Dockerfile .
-          docker push $ECR_REGISTRY/cbt-api:$GITHUB_SHA
-
-      - name: Build and push Web
-        run: |
-          docker build -t $ECR_REGISTRY/cbt-web:$GITHUB_SHA -f apps/web/Dockerfile .
-          docker push $ECR_REGISTRY/cbt-web:$GITHUB_SHA
-
-      - name: Deploy to EKS
-        run: |
-          aws eks update-kubeconfig --name cbt-staging
-          kubectl set image deployment/cbt-api api=$ECR_REGISTRY/cbt-api:$GITHUB_SHA -n cbt-staging
-          kubectl set image deployment/cbt-web web=$ECR_REGISTRY/cbt-web:$GITHUB_SHA -n cbt-staging
-          kubectl rollout status deployment/cbt-api -n cbt-staging --timeout=300s
-          kubectl rollout status deployment/cbt-web -n cbt-staging --timeout=300s
-
-      - name: Run migrations
-        run: |
-          kubectl exec -n cbt-staging deploy/cbt-api -- npx prisma migrate deploy
-
-      - name: Smoke tests
-        run: |
-          curl -f https://staging.cbt-platform.com/health
-          curl -f https://staging-api.cbt-platform.com/api/v1/health
-```
-
-### CD Production (`cd-production.yml`)
-
-```yaml
-name: Deploy Production
-
-on:
-  push:
-    tags: ['v*']
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-south-1
-
-      - name: Build and push images
-        run: |
-          docker build -t $ECR_REGISTRY/cbt-api:${{ github.ref_name }} -f apps/api/Dockerfile .
-          docker push $ECR_REGISTRY/cbt-api:${{ github.ref_name }}
-
-      - name: Deploy (rolling update)
-        run: |
-          aws eks update-kubeconfig --name cbt-production
-          kubectl set image deployment/cbt-api api=$ECR_REGISTRY/cbt-api:${{ github.ref_name }} -n cbt-production
-          kubectl rollout status deployment/cbt-api -n cbt-production --timeout=600s
-
-      - name: Verify deployment
-        run: |
-          for i in {1..10}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.cbt-platform.com/health)
-            if [ "$STATUS" = "200" ]; then exit 0; fi
-            sleep 10
-          done
-          exit 1
-
-      - name: Rollback on failure
-        if: failure()
-        run: |
-          kubectl rollout undo deployment/cbt-api -n cbt-production
-          kubectl rollout undo deployment/cbt-web -n cbt-production
-```
-
-## Branch Strategy
+## Branch → environment
 
 ```
-main ────────────── Production releases (tags: v*)
-  │
-develop ─────────── Staging deployments
-  │
-feature/* ───────── Feature branches (PR → develop)
-hotfix/* ────────── Hotfix branches (PR → main + develop)
+feature/* ──PR──► CI
+                 │
+dev ─────────────► development  (/var/www/cbt/dev)
+develop ──────────► staging       (/var/www/cbt/staging)
+main ─────────────► production    (/var/www/cbt/prod)  [manual approval]
+tags v* ──────────► release marker (optional); prod tracks main
 ```
 
-## Database Migration Strategy
+## CD workflows (placeholders)
 
-1. Migrations run as Kubernetes Job before deployment
-2. Backward-compatible migrations only (no column drops in same release)
-3. Destructive changes use expand-contract pattern
-4. Pre-exam freeze: no migrations 48 hours before scheduled exams
+- [`.github/workflows/deploy-dev.yml`](../.github/workflows/deploy-dev.yml)
+- [`.github/workflows/deploy-staging.yml`](../.github/workflows/deploy-staging.yml)
+- [`.github/workflows/deploy-production.yml`](../.github/workflows/deploy-production.yml)
 
-## Monitoring Integration
+Each job SSHs to `DEPLOY_HOST` and runs:
 
-- **Deployment notifications:** Slack #deployments channel
-- **Error tracking:** Sentry release tracking
-- **APM:** Datadog deployment markers
-- **Metrics:** CloudWatch alarms on 5xx rate during deployment
+```bash
+export CBT_APP_ROOT=...   # DEPLOY_PATH_*
+bash scripts/deploy/remote-deploy.sh <env> <git-sha>
+```
+
+That script pulls the commit, then [`scripts/deploy/deploy.sh`](../scripts/deploy/deploy.sh):
+
+1. `pnpm install --frozen-lockfile`
+2. Build shared + API + Web
+3. `prisma migrate deploy`
+4. `pm2 startOrReload` for that env
+5. Local health check on the API port
+
+## Required GitHub secrets
+
+| Secret | Purpose |
+|--------|---------|
+| `DEPLOY_HOST` | Server IP/hostname |
+| `DEPLOY_USER` | SSH user |
+| `DEPLOY_SSH_KEY` | Private key |
+| `DEPLOY_SSH_PORT` | SSH port (often `22`) |
+| `DEPLOY_PATH_DEV` | Absolute path to dev checkout |
+| `DEPLOY_PATH_STAGING` | Absolute path to staging checkout |
+| `DEPLOY_PATH_PRODUCTION` | Absolute path to prod checkout |
+
+Optional variable: `PROD_API_HEALTH_URL` for post-deploy public smoke check.
+
+## Process layout (PM2)
+
+Configs under `infra/deploy/pm2/`:
+
+| Env | API port | Web port |
+|-----|----------|----------|
+| dev | 4010 | 3010 |
+| staging | 4020 | 3020 |
+| production | 4030 | 3030 |
+
+Nginx terminates HTTP(S) and proxies to those localhost ports — see `infra/deploy/nginx/cbt.conf.example`.
+
+## Database migrations
+
+- Run automatically on every deploy via `prisma migrate deploy`
+- Prefer backward-compatible migrations
+- Avoid destructive changes shortly before scheduled exams
+
+## Full admin guide
+
+Step-by-step server bootstrap, env files, Nginx, TLS, and rollback: **[SERVER-DEPLOY.md](./SERVER-DEPLOY.md)**.
