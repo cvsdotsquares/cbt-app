@@ -7,6 +7,7 @@ import { Header } from '@/components/layout/header';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { AiAssistant } from '@/components/ai/ai-assistant';
+import { TenantBranding } from '@/components/layout/tenant-branding';
 import { usePermissions } from '@/hooks/use-permissions';
 import { getDefaultDashboardPath, getPermissionForPath } from '@/lib/dashboard-nav';
 
@@ -42,6 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-dvh mesh-bg">
+      <TenantBranding />
       <div className="hidden lg:block">
         <Sidebar />
       </div>

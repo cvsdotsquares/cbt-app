@@ -34,9 +34,17 @@ export class TenantsService {
   }
 
   async updateBranding(id: string, branding: Record<string, unknown>) {
+    const existing = await this.prisma.tenant.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Tenant not found');
+
+    const previous =
+      existing.branding && typeof existing.branding === 'object' && !Array.isArray(existing.branding)
+        ? (existing.branding as Record<string, unknown>)
+        : {};
+
     return this.prisma.tenant.update({
       where: { id },
-      data: { branding: branding as never },
+      data: { branding: { ...previous, ...branding } as never },
     });
   }
 

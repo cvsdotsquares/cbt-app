@@ -6,6 +6,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Permission } from '@cbt/shared';
+import { UpdateBrandingDto } from './dto/update-branding.dto';
 
 @ApiTags('Tenants')
 @Controller('tenants')
@@ -41,10 +42,10 @@ export class TenantsController {
   updateBranding(
     @Param('id') id: string,
     @CurrentUser('tenantId') tenantId: string,
-    @Body() branding: Record<string, unknown>,
+    @Body() branding: UpdateBrandingDto,
   ) {
     if (id !== tenantId) throw new ForbiddenException('Cannot update another tenant');
-    return this.tenantsService.updateBranding(id, branding);
+    return this.tenantsService.updateBranding(id, branding as Record<string, unknown>);
   }
 
   @Patch(':id/security')

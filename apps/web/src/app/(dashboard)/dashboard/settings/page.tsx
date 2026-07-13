@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/stores/auth-store';
 import { useRequireAuth } from '@/hooks/use-auth';
 import { tenantsApi } from '@/lib/api';
+import { applyTenantPrimaryColor } from '@/lib/tenant-branding';
 import { Permission } from '@cbt/shared';
 import { usePermissions } from '@/hooks/use-permissions';
 import { PageHeader } from '@/components/layout/page-header';
@@ -62,6 +63,7 @@ export default function SettingsPage() {
   const { accessToken } = useRequireAuth(true);
   const { user } = useAuthStore();
   const { can } = usePermissions();
+  const queryClient = useQueryClient();
   const [primaryColor, setPrimaryColor] = useState('#2563eb');
 
   const canManageBranding = can(Permission.TENANT_BRANDING);
@@ -78,12 +80,23 @@ export default function SettingsPage() {
   }, [tenant]);
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      tenantsApi.updateBranding(accessToken!, user!.tenantId, { primaryColor }),
-    onSuccess: () => {
-      toast({ title: 'Branding saved', description: 'Your organization theme has been updated.', variant: 'success' });
+    mutationFn: () => {
+      if (!accessToken || !user?.tenantId) {
+        throw new Error('You must be signed in to save branding.');
+      }
+      return tenantsApi.updateBranding(accessToken, user.tenantId, { primaryColor });
     },
-    onError: (e: Error) => toast({ title: 'Save failed', description: e.message, variant: 'destructive' }),
+    onSuccess: async () => {
+      applyTenantPrimaryColor(primaryColor);
+      await queryClient.invalidateQueries({ queryKey: ['tenant', user?.tenantId] });
+      toast({
+        title: 'Branding saved',
+        description: 'Primary color applied across your institute portal.',
+        variant: 'success',
+      });
+    },
+    onError: (e: Error) =>
+      toast({ title: 'Save failed', description: e.message, variant: 'destructive' }),
   });
 
   const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
