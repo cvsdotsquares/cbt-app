@@ -11,14 +11,14 @@ import { EmptyState } from '@/components/layout/data-table';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { batchesApi, curriculumApi, candidatesApi } from '@/lib/api';
+import { batchesApi, curriculumApi, candidatesApi, usersApi } from '@/lib/api';
 import { useRequireAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Permission } from '@cbt/shared';
 import { toast } from '@/hooks/use-toast';
 import {
   School, Users, CheckCircle2, Clock, Circle, Plus, Search,
-  GraduationCap, BookOpen, UserPlus, Sparkles, ChevronRight, Trash2, Pencil, Upload,
+  GraduationCap, BookOpen, UserPlus, Sparkles, ChevronRight, Trash2, Pencil, Upload, UserCog,
 } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
@@ -47,7 +47,23 @@ type SyllabusSubject = {
   }[];
 };
 
-type TabId = 'students' | 'syllabus';
+type TabId = 'students' | 'syllabus' | 'teachers';
+
+type BatchTeacherAssignment = {
+  id: string;
+  userId: string;
+  subjectId: string;
+  subject: { id: string; name: string };
+  user: { id: string; firstName: string; lastName: string; email: string } | null;
+};
+
+type StaffUser = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  userRoles: { role: { name: string } }[];
+};
 
 const STATUS_CONFIG = {
   COMPLETED: {
@@ -190,6 +206,8 @@ export default function BatchesPage() {
   const [enrollCandidateId, setEnrollCandidateId] = useState('');
   const [enrollRoll, setEnrollRoll] = useState('');
   const [showDelete, setShowDelete] = useState(false);
+  const [assignTeacherUserId, setAssignTeacherUserId] = useState('');
+  const [assignSubjectId, setAssignSubjectId] = useState('');
 
   const { data: batches, isLoading } = useQuery({
     queryKey: ['batches'],
@@ -231,6 +249,27 @@ export default function BatchesPage() {
     enabled: !!accessToken && !!selectedBatch && activeTab === 'students',
   });
 
+  const { data: batchTeachers, isLoading: teachersLoading } = useQuery({
+    queryKey: ['batch-teachers', selectedBatch],
+    queryFn: () => batchesApi.listTeachers(accessToken!, selectedBatch!) as Promise<BatchTeacherAssignment[]>,
+    enabled: !!accessToken && !!selectedBatch && (activeTab === 'teachers' || canManage),
+  });
+
+  const { data: staffUsersData } = useQuery({
+    queryKey: ['staff-teachers-for-batch'],
+    queryFn: () => usersApi.list(accessToken!, 1, '', 100) as Promise<{ items: StaffUser[] }>,
+    enabled: !!accessToken && canManage && activeTab === 'teachers',
+  });
+
+  const teacherOptions = useMemo(
+    () => (staffUsersData?.items ?? []).filter((u) =>
+      u.userRoles.some((ur) => ur.role.name === 'TEACHER'),
+    ),
+    [staffUsersData],
+  );
+
+  const batchSubjects = batchDetail?.academicClass.subjects ?? [];
+
   const filteredBatches = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return batches ?? [];
@@ -265,6 +304,8 @@ export default function BatchesPage() {
 
   useEffect(() => {
     setSelectedSubjectId(null);
+    setAssignTeacherUserId('');
+    setAssignSubjectId('');
   }, [selectedBatch]);
 
   const totalStudents = useMemo(
@@ -285,6 +326,33 @@ export default function BatchesPage() {
       toast({ title: 'Student added to batch' });
     },
     onError: (e: Error) => toast({ title: 'Could not enroll', description: e.message, variant: 'destructive' }),
+  });
+
+  const assignTeacherMutation = useMutation({
+    mutationFn: () =>
+      batchesApi.assignTeacher(accessToken!, selectedBatch!, {
+        userId: assignTeacherUserId,
+        subjectId: assignSubjectId,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batch-teachers', selectedBatch] });
+      setAssignTeacherUserId('');
+      setAssignSubjectId('');
+      toast({ title: 'Teacher assigned', variant: 'success' });
+    },
+    onError: (e: Error) =>
+      toast({ title: 'Could not assign teacher', description: e.message, variant: 'destructive' }),
+  });
+
+  const removeTeacherMutation = useMutation({
+    mutationFn: (assignmentId: string) =>
+      batchesApi.removeTeacher(accessToken!, selectedBatch!, assignmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batch-teachers', selectedBatch] });
+      toast({ title: 'Teacher removed', variant: 'success' });
+    },
+    onError: (e: Error) =>
+      toast({ title: 'Could not remove teacher', description: e.message, variant: 'destructive' }),
   });
 
   const createMutation = useMutation({
@@ -652,9 +720,20 @@ export default function BatchesPage() {
               {/* Tabs */}
               <div className="flex gap-1 rounded-xl border border-border/60 bg-muted/30 p-1 shadow-sm">
                 {([
-                  { id: 'syllabus' as const, label: 'Syllabus progress', icon: BookOpen },
-                  { id: 'students' as const, label: `Students (${batchDetail?.enrollments?.length ?? selectedBatchMeta?._count.enrollments ?? 0})`, icon: Users },
-                ]).map(({ id, label, icon: Icon }) => (
+                  { id: 'syllabus' as const, label: 'Syllabus progress', icon: BookOpen, show: true },
+                  {
+                    id: 'students' as const,
+                    label: `Students (${batchDetail?.enrollments?.length ?? selectedBatchMeta?._count.enrollments ?? 0})`,
+                    icon: Users,
+                    show: true,
+                  },
+                  {
+                    id: 'teachers' as const,
+                    label: `Teachers (${batchTeachers?.length ?? 0})`,
+                    icon: UserCog,
+                    show: canManage,
+                  },
+                ] as const).filter((t) => t.show).map(({ id, label, icon: Icon }) => (
                   <button
                     key={id}
                     type="button"
@@ -758,6 +837,132 @@ export default function BatchesPage() {
                                   Roll {e.rollNumber}
                                 </Badge>
                               )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {activeTab === 'teachers' && canManage && (
+                <Card className="surface-card overflow-hidden">
+                  <CardHeader className="border-b border-border/60 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                      <UserCog className="h-4 w-4 text-primary" />
+                      Assigned teachers
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Assign a teacher to a subject in this batch. They will only see that subject’s syllabus, books, and tests.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-5 pt-5">
+                    <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                        <select
+                          className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm"
+                          value={assignTeacherUserId}
+                          onChange={(e) => setAssignTeacherUserId(e.target.value)}
+                        >
+                          <option value="">Choose a teacher…</option>
+                          {teacherOptions.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.firstName} {t.lastName} — {t.email}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm"
+                          value={assignSubjectId}
+                          onChange={(e) => setAssignSubjectId(e.target.value)}
+                        >
+                          <option value="">Choose a subject…</option>
+                          {batchSubjects.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        <Button
+                          disabled={
+                            !assignTeacherUserId
+                            || !assignSubjectId
+                            || assignTeacherMutation.isPending
+                          }
+                          onClick={() => assignTeacherMutation.mutate()}
+                        >
+                          {assignTeacherMutation.isPending ? 'Assigning…' : 'Assign'}
+                        </Button>
+                      </div>
+                      {teacherOptions.length === 0 && (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          No teachers found. Create a user with the Teacher role on{' '}
+                          <Link href="/dashboard/users" className="font-semibold text-primary hover:underline">
+                            Staff &amp; Teachers
+                          </Link>
+                          .
+                        </p>
+                      )}
+                      {batchSubjects.length === 0 && (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          No subjects for this class yet. Upload NCERT books so subjects are available.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          Current assignments
+                        </p>
+                        <Badge variant="outline" className="normal-case tracking-normal">
+                          {batchTeachers?.length ?? 0} assignment{(batchTeachers?.length ?? 0) === 1 ? '' : 's'}
+                        </Badge>
+                      </div>
+                      {teachersLoading ? (
+                        <TableSkeleton rows={3} />
+                      ) : (batchTeachers ?? []).length === 0 ? (
+                        <div className="rounded-xl border border-dashed py-10">
+                          <EmptyState
+                            icon={UserCog}
+                            title="No teachers assigned"
+                            description="Choose a teacher and subject above to assign them to this batch."
+                          />
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-border/50 overflow-hidden rounded-xl border border-border/60">
+                          {(batchTeachers ?? []).map((a) => (
+                            <div
+                              key={a.id}
+                              className="flex items-center gap-3 bg-card px-4 py-3.5 transition-colors hover:bg-muted/30"
+                            >
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-primary/10 text-xs font-bold text-primary">
+                                {a.user
+                                  ? initials(a.user.firstName, a.user.lastName)
+                                  : '?'}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-semibold">
+                                  {a.user
+                                    ? `${a.user.firstName} ${a.user.lastName}`
+                                    : 'Unknown teacher'}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {a.user?.email ?? a.userId}
+                                </p>
+                              </div>
+                              <Badge variant="secondary" className="normal-case tracking-normal shrink-0">
+                                {a.subject.name}
+                              </Badge>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="shrink-0 text-destructive hover:text-destructive"
+                                title="Remove assignment"
+                                disabled={removeTeacherMutation.isPending}
+                                onClick={() => removeTeacherMutation.mutate(a.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           ))}
                         </div>

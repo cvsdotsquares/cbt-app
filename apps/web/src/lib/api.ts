@@ -457,8 +457,8 @@ export const candidatesApi = {
 };
 
 export const usersApi = {
-  list: (token: string, page = 1, search = '') =>
-    apiFetch(`/users?page=${page}&limit=20${search ? `&search=${encodeURIComponent(search)}` : ''}`, authHeaders(token)),
+  list: (token: string, page = 1, search = '', limit = 20) =>
+    apiFetch(`/users?page=${page}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`, authHeaders(token)),
   create: (token: string, body: { email: string; password: string; firstName: string; lastName: string; roleIds?: string[] }) =>
     apiFetch('/users', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
   get: (token: string, id: string) => apiFetch(`/users/${id}`, authHeaders(token)),

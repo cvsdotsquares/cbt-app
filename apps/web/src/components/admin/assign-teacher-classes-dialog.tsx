@@ -96,6 +96,7 @@ export function AssignTeacherClassesDialog({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teacher-assignments', teacher?.id] });
+      queryClient.invalidateQueries({ queryKey: ['batch-teachers'] });
       queryClient.invalidateQueries({ queryKey: ['batches'] });
       setSubjectId('');
       toast({ title: 'Class assigned', variant: 'success' });
@@ -109,6 +110,7 @@ export function AssignTeacherClassesDialog({
       batchesApi.removeTeacher(accessToken, a.batchId, a.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teacher-assignments', teacher?.id] });
+      queryClient.invalidateQueries({ queryKey: ['batch-teachers'] });
       queryClient.invalidateQueries({ queryKey: ['batches'] });
       toast({ title: 'Assignment removed', variant: 'success' });
     },

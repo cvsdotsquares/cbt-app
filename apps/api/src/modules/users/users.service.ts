@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Role } from '@cbt/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { parsePage, parseLimit } from '../../common/utils/pagination.util';
 
 const BCRYPT_ROUNDS = 12;
+
+/** Student accounts live under Candidates — never shown or assignable on Staff & Teachers. */
+const STUDENT_ROLES = [Role.CANDIDATE, Role.STUDENT] as const;
 
 @Injectable()
 export class UsersService {
@@ -14,6 +18,10 @@ export class UsersService {
     const l = parseLimit(limit);
     const where = {
       tenantId,
+      // Staff & Teachers only — exclude pure students/candidates
+      userRoles: {
+        some: { role: { name: { notIn: [...STUDENT_ROLES] } } },
+      },
       ...(search && {
         OR: [
           { email: { contains: search } },
@@ -57,7 +65,7 @@ export class UsersService {
 
   async getRoles(callerRoles: string[] = []) {
     const roles = await this.prisma.role.findMany({
-      where: { isSystem: true },
+      where: { isSystem: true, name: { notIn: [...STUDENT_ROLES] } },
       select: { id: true, name: true, description: true },
       orderBy: { name: 'asc' },
     });
@@ -65,6 +73,12 @@ export class UsersService {
       return roles.filter((r) => r.name !== 'SUPER_ADMIN');
     }
     return roles;
+  }
+
+  private assertStaffRoles(roles: { name: string }[]) {
+    if (roles.some((r) => STUDENT_ROLES.includes(r.name as (typeof STUDENT_ROLES)[number]))) {
+      throw new BadRequestException('Student/candidate roles are managed from the Students page');
+    }
   }
 
   async create(
@@ -82,6 +96,7 @@ export class UsersService {
     if (roleIds.length) {
       const roles = await this.prisma.role.findMany({ where: { id: { in: roleIds }, isSystem: true } });
       if (roles.length !== roleIds.length) throw new BadRequestException('One or more roles are invalid');
+      this.assertStaffRoles(roles);
     }
 
     return this.prisma.user.create({
@@ -112,6 +127,10 @@ export class UsersService {
   async assignRole(userId: string, roleId: string, assignedBy: string, tenantId: string) {
     const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId } });
     if (!user) throw new NotFoundException('User not found');
+
+    const role = await this.prisma.role.findFirst({ where: { id: roleId, isSystem: true } });
+    if (!role) throw new BadRequestException('Invalid role');
+    this.assertStaffRoles([role]);
 
     const existing = await this.prisma.userRole.findFirst({
       where: { userId, roleId },
