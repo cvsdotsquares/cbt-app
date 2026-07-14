@@ -24,29 +24,47 @@ export class MaterialsService {
       type?: MaterialType;
       academicClassId?: string;
       subjectId?: string;
+      /** Restrict to these subject IDs (teacher scope). */
+      subjectIds?: string[];
     },
   ) {
+    if (filters?.subjectIds && filters.subjectIds.length === 0) {
+      return [];
+    }
+
+    const subjectConstraint = filters?.subjectId
+      ? { subjectId: filters.subjectId }
+      : filters?.subjectIds
+        ? { subjectId: { in: filters.subjectIds } }
+        : {};
+
     return this.prisma.studyMaterial.findMany({
       where: {
         tenantId,
         ...(filters?.chapterId ? { chapterId: filters.chapterId } : {}),
         ...(filters?.type ? { type: filters.type } : {}),
         ...(filters?.academicClassId ? { academicClassId: filters.academicClassId } : {}),
-        ...(filters?.subjectId ? { subjectId: filters.subjectId } : {}),
+        ...subjectConstraint,
       },
       orderBy: { createdAt: 'desc' },
       include: {
         academicClass: { select: { level: true, name: true } },
-        subject: { select: { name: true, code: true } },
+        subject: { select: { id: true, name: true, code: true } },
         chapter: { select: { title: true, number: true } },
         topic: { select: { title: true } },
       },
     });
   }
 
-  async findOne(id: string, tenantId: string) {
+  async findOne(id: string, tenantId: string, allowedSubjectIds?: string[]) {
     const material = await this.prisma.studyMaterial.findFirst({
-      where: { id, tenantId },
+      where: {
+        id,
+        tenantId,
+        ...(allowedSubjectIds
+          ? { subjectId: { in: allowedSubjectIds } }
+          : {}),
+      },
       include: {
         academicClass: true,
         subject: true,
@@ -59,13 +77,21 @@ export class MaterialsService {
     return material;
   }
 
-  async getFileStream(id: string, tenantId: string): Promise<{
+  async getFileStream(id: string, tenantId: string, allowedSubjectIds?: string[]): Promise<{
     stream: ReadStream;
     fileName: string;
     mimeType: string;
     fileSize: number;
   }> {
-    const material = await this.prisma.studyMaterial.findFirst({ where: { id, tenantId } });
+    const material = await this.prisma.studyMaterial.findFirst({
+      where: {
+        id,
+        tenantId,
+        ...(allowedSubjectIds
+          ? { subjectId: { in: allowedSubjectIds } }
+          : {}),
+      },
+    });
     if (!material) throw new NotFoundException('Material not found');
 
     const stream = await this.storage.getReadStream(material.fileUrl);

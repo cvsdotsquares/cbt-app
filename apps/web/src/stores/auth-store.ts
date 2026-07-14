@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AuthUser } from '@cbt/shared';
-import { normalizeRoles, isAdmin } from '@/lib/roles';
+import { Permission, getPermissionsForRoles } from '@cbt/shared';
+import { normalizeRoles, isAdmin, isTeacherOnly } from '@/lib/roles';
 import { syncAuthSession, clearAuthSession, hydrateAuthSession } from '@/lib/auth-session';
+import { getDefaultDashboardPath } from '@/lib/dashboard-nav';
 
 interface AuthState {
   user: AuthUser | null;
@@ -84,5 +86,11 @@ export async function syncSessionFromStore() {
 }
 
 export function getPostLoginPath(roles: unknown) {
-  return isAdmin(normalizeRoles(roles)) ? '/dashboard' : '/my-exams';
+  const normalized = normalizeRoles(roles);
+  if (isTeacherOnly(normalized)) {
+    const permissions = getPermissionsForRoles(normalized as never);
+    const can = (p: Permission | string) => permissions.includes(p as never);
+    return getDefaultDashboardPath(can, normalized);
+  }
+  return isAdmin(normalized) ? '/dashboard' : '/my-exams';
 }

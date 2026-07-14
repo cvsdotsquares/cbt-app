@@ -29,6 +29,12 @@ export class TenantsController {
     return this.tenantsService.findAll(page, limit);
   }
 
+  @Get('me/branding')
+  @ApiOperation({ summary: 'Get branding for the current user\'s institute (all roles)' })
+  getMyBranding(@CurrentUser('tenantId') tenantId: string) {
+    return this.tenantsService.getBranding(tenantId);
+  }
+
   @Get(':id')
   @RequirePermissions(Permission.TENANT_READ)
   @ApiOperation({ summary: 'Get tenant details' })

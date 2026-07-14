@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +18,8 @@ import {
   Sparkles, BookOpen, Layers, Clock, Hash, Shield, Loader2,
   CheckCircle2, ArrowRight, GraduationCap, FileText,
 } from 'lucide-react';
+import { useAuthStore } from '@/stores/auth-store';
+import { isTeacherOnly, normalizeRoles } from '@/lib/roles';
 
 type TestMode = 'single' | 'all';
 
@@ -38,12 +40,14 @@ const selectClass =
 
 export default function AiTestsPage() {
   const { accessToken } = useRequireAuth(true);
+  const { user } = useAuthStore();
+  const teacherPortal = isTeacherOnly(normalizeRoles(user?.roles));
   const [createdExam, setCreatedExam] = useState<{
     id: string;
     title: string;
     questionCount: number;
   } | null>(null);
-  const [mode, setMode] = useState<TestMode>('all');
+  const [mode, setMode] = useState<TestMode>(teacherPortal ? 'single' : 'all');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [form, setForm] = useState({
     title: 'Weekly Assessment',
@@ -58,13 +62,17 @@ export default function AiTestsPage() {
     questionTypes: ['MCQ'],
   });
 
+  useEffect(() => {
+    if (teacherPortal) setMode('single');
+  }, [teacherPortal]);
+
   const { data: classes } = useQuery({
     queryKey: ['curriculum-classes'],
     queryFn: () => curriculumApi.getClasses(accessToken!) as Promise<{
       id: string; level: number;
       subjects: { id: string; name: string }[];
     }[]>,
-    enabled: !!accessToken,
+    enabled: !!accessToken && !teacherPortal,
   });
 
   const { data: batches } = useQuery({
@@ -73,6 +81,7 @@ export default function AiTestsPage() {
       id: string; name: string;
       academicClass: { name: string; level: number };
       _count?: { enrollments: number };
+      teacherAssignments?: { subject: { id: string; name: string; code?: string } }[];
     }[]>,
     enabled: !!accessToken,
   });
@@ -82,12 +91,31 @@ export default function AiTestsPage() {
   );
 
   const selectedBatch = (batches ?? []).find((b) => b.id === form.batchId);
-  const classSubjects = selectedBatch
-    ? subjects.filter((s) => s.classLevel === selectedBatch.academicClass.level)
-    : [];
+
+  const teacherSubjects = useMemo(() => {
+    if (!teacherPortal || !selectedBatch?.teacherAssignments?.length) return [];
+    return selectedBatch.teacherAssignments.map((a) => ({
+      id: a.subject.id,
+      name: a.subject.name,
+      classLevel: selectedBatch.academicClass.level,
+    }));
+  }, [teacherPortal, selectedBatch]);
+
+  const classSubjects = teacherPortal
+    ? teacherSubjects
+    : selectedBatch
+      ? subjects.filter((s) => s.classLevel === selectedBatch.academicClass.level)
+      : [];
 
   const selectedSubject = classSubjects.find((s) => s.id === form.subjectId)
     ?? subjects.find((s) => s.id === form.subjectId);
+
+  useEffect(() => {
+    if (!teacherPortal || !form.batchId || form.subjectId) return;
+    if (teacherSubjects.length === 1) {
+      setForm((f) => ({ ...f, subjectId: teacherSubjects[0].id }));
+    }
+  }, [teacherPortal, form.batchId, form.subjectId, teacherSubjects]);
 
   const estimatedQuestions = useMemo(() => {
     if (mode === 'all') {
@@ -99,9 +127,11 @@ export default function AiTestsPage() {
   const createMutation = useMutation({
     mutationFn: () => aiApi.createAiTest(accessToken!, {
       ...form,
-      allSubjects: mode === 'all',
-      subjectId: mode === 'single' ? form.subjectId : undefined,
-      durationMinutes: mode === 'all' ? form.durationMinutes : Math.min(form.durationMinutes, 60),
+      allSubjects: teacherPortal ? false : mode === 'all',
+      subjectId: teacherPortal || mode === 'single' ? form.subjectId : undefined,
+      durationMinutes: mode === 'all' && !teacherPortal
+        ? form.durationMinutes
+        : Math.min(form.durationMinutes, 60),
     }),
     onSuccess: (data) => {
       const d = data as {
@@ -158,8 +188,12 @@ export default function AiTestsPage() {
       <PageHeader
         title="Create Class Test"
         highlight="Class Test"
-        description="Build a NCERT-aligned draft test from uploaded books. Questions are generated only from indexed chapters your batch has studied."
-        badge="NCERT · AI"
+        description={
+          teacherPortal
+            ? 'Generate a NCERT-aligned draft from your assigned subject, using chapters your class has studied.'
+            : 'Build a NCERT-aligned draft test from uploaded books. Questions are generated only from indexed chapters your batch has studied.'
+        }
+        badge={teacherPortal ? 'Teacher · Assigned subject' : 'NCERT · AI'}
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,320px)]">
@@ -170,10 +204,11 @@ export default function AiTestsPage() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Sparkles className="h-5 w-5 text-primary" />
-                Test type
+                {teacherPortal ? 'Your assigned subject' : 'Test type'}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {!teacherPortal && (
               <div className="grid gap-3 sm:grid-cols-2">
                 <ModeCard
                   active={mode === 'all'}
@@ -190,6 +225,7 @@ export default function AiTestsPage() {
                   onClick={() => setMode('single')}
                 />
               </div>
+              )}
 
               <div className="space-y-4">
                 <div>
@@ -218,9 +254,14 @@ export default function AiTestsPage() {
                       </option>
                     ))}
                   </select>
+                  {teacherPortal && !(batches ?? []).length && (
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      No assigned classes yet. Ask your admin to assign you to a batch and subject.
+                    </p>
+                  )}
                 </div>
 
-                {mode === 'single' && (
+                {(mode === 'single' || teacherPortal) && (
                   <div>
                     <Label htmlFor="subject">Subject</Label>
                     <select

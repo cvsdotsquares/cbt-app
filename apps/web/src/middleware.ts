@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ACCESS_TOKEN_COOKIE, verifyAccessToken } from '@/lib/auth-cookies';
-import { isAdmin, normalizeRoles } from '@/lib/roles';
+import { isAdmin, isTeacherOnly, normalizeRoles } from '@/lib/roles';
 
 const PUBLIC_PATHS = ['/login', '/register', '/mfa', '/forgot-password', '/reset-password', '/verify'];
 
@@ -13,6 +13,10 @@ function registrationAllowed(): boolean {
     process.env.ALLOW_PUBLIC_REGISTRATION === 'true'
     || process.env.NODE_ENV !== 'production'
   );
+}
+
+function staffHome(roles: string[]) {
+  return isTeacherOnly(roles) ? '/dashboard/teacher' : '/dashboard';
 }
 
 export async function middleware(request: NextRequest) {
@@ -29,18 +33,20 @@ export async function middleware(request: NextRequest) {
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   let isAuthenticated = false;
   let isAdminUser = false;
+  let roles: string[] = [];
 
   if (accessToken) {
     const payload = await verifyAccessToken(accessToken);
     if (payload?.sub) {
       isAuthenticated = true;
-      isAdminUser = isAdmin(normalizeRoles(payload.roles));
+      roles = normalizeRoles(payload.roles);
+      isAdminUser = isAdmin(roles);
     }
   }
 
   if (pathname === '/') {
     if (isAuthenticated) {
-      return NextResponse.redirect(new URL(isAdminUser ? '/dashboard' : '/my-exams', request.url));
+      return NextResponse.redirect(new URL(isAdminUser ? staffHome(roles) : '/my-exams', request.url));
     }
     return NextResponse.redirect(new URL('/login', request.url));
   }
@@ -60,7 +66,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if ((pathname === '/my-exams' || pathname.startsWith('/exam/')) && isAdminUser) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL(staffHome(roles), request.url));
   }
 
   return NextResponse.next();

@@ -88,10 +88,13 @@ export default function SettingsPage() {
     },
     onSuccess: async () => {
       applyTenantPrimaryColor(primaryColor);
-      await queryClient.invalidateQueries({ queryKey: ['tenant', user?.tenantId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tenant', user?.tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['tenant-branding'] }),
+      ]);
       toast({
         title: 'Branding saved',
-        description: 'Primary color applied across your institute portal.',
+        description: 'Primary color applied across admin, teacher, and student portals.',
         variant: 'success',
       });
     },

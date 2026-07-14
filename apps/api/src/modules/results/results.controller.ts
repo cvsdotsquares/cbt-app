@@ -7,7 +7,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Permission } from '@cbt/shared';
+import { Permission, type JwtPayload } from '@cbt/shared';
+import { isTeacherScoped } from '../../common/utils/teacher-scope.util';
 
 @ApiTags('Results')
 @Controller('results')
@@ -15,6 +16,18 @@ import { Permission } from '@cbt/shared';
 @ApiBearerAuth()
 export class ResultsController {
   constructor(private resultsService: ResultsService) {}
+
+  private async assertTeacherExamAccess(user: JwtPayload, examId: string) {
+    if (isTeacherScoped(user)) {
+      await this.resultsService.assertTeacherOwnsExam(examId, user.sub);
+    }
+  }
+
+  private async assertTeacherSessionAccess(user: JwtPayload, sessionId: string) {
+    if (isTeacherScoped(user)) {
+      await this.resultsService.assertTeacherOwnsSession(sessionId, user.sub);
+    }
+  }
 
   @Get('verify/:resultId')
   @Public()
@@ -42,51 +55,76 @@ export class ResultsController {
 
   @Post('evaluate/:sessionId')
   @RequirePermissions(Permission.RESULT_EVALUATE)
-  evaluate(@Param('sessionId') sessionId: string) {
+  async evaluate(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    await this.assertTeacherSessionAccess(user, sessionId);
     return this.resultsService.evaluateSession(sessionId);
   }
 
   @Post('rank/:examId')
   @RequirePermissions(Permission.RESULT_RANK)
-  calculateRanks(@Param('examId') examId: string) {
+  async calculateRanks(
+    @Param('examId') examId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    await this.assertTeacherExamAccess(user, examId);
     return this.resultsService.calculateRanks(examId);
   }
 
   @Post('publish/:examId')
   @RequirePermissions(Permission.RESULT_PUBLISH)
-  publish(@Param('examId') examId: string) {
+  async publish(
+    @Param('examId') examId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    await this.assertTeacherExamAccess(user, examId);
     return this.resultsService.publishResults(examId);
   }
 
   @Get('exam/:examId/subjective')
   @RequirePermissions(Permission.RESULT_EVALUATE)
-  getSubjectiveResponses(@Param('examId') examId: string) {
+  async getSubjectiveResponses(
+    @Param('examId') examId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    await this.assertTeacherExamAccess(user, examId);
     return this.resultsService.getSubjectiveResponses(examId);
   }
 
   @Patch('grade/:sessionId/:questionId')
   @RequirePermissions(Permission.RESULT_EVALUATE)
-  gradeResponse(
+  async gradeResponse(
     @Param('sessionId') sessionId: string,
     @Param('questionId') questionId: string,
     @Body('marksAwarded') marksAwarded: number,
+    @CurrentUser() user: JwtPayload,
   ) {
+    await this.assertTeacherSessionAccess(user, sessionId);
     return this.resultsService.gradeResponse(sessionId, questionId, marksAwarded);
   }
 
   @Get('exam/:examId')
   @RequirePermissions(Permission.RESULT_READ)
-  getExamResults(
+  async getExamResults(
     @Param('examId') examId: string,
+    @CurrentUser() user: JwtPayload,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
+    await this.assertTeacherExamAccess(user, examId);
     return this.resultsService.getExamResults(examId, page, limit);
   }
 
   @Get('exam/:examId/export')
   @RequirePermissions(Permission.RESULT_READ)
-  async exportExamResults(@Param('examId') examId: string, @Res() res: Response) {
+  async exportExamResults(
+    @Param('examId') examId: string,
+    @CurrentUser() user: JwtPayload,
+    @Res() res: Response,
+  ) {
+    await this.assertTeacherExamAccess(user, examId);
     const csv = await this.resultsService.exportExamResultsCsv(examId);
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="results-${examId}.csv"`);

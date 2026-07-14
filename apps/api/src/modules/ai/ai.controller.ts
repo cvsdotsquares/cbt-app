@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, UseGuards, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AiService } from './ai.service';
 import { AiTestsService } from './ai-tests.service';
@@ -6,7 +6,14 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Permission } from '@cbt/shared';
+import { Permission, type JwtPayload } from '@cbt/shared';
+import { PrismaService } from '../../prisma/prisma.service';
+import {
+  isTeacherScoped,
+  teacherHasBatchAccess,
+  teacherHasSubjectAccess,
+  getTeacherSubjectIdsForBatch,
+} from '../../common/utils/teacher-scope.util';
 
 @ApiTags('AI')
 @Controller('ai')
@@ -16,7 +23,40 @@ export class AiController {
   constructor(
     private aiService: AiService,
     private aiTestsService: AiTestsService,
+    private prisma: PrismaService,
   ) {}
+
+  private async assertTeacherCanGenerate(
+    user: JwtPayload,
+    opts: { batchId?: string; subjectId?: string; allSubjects?: boolean },
+  ) {
+    if (!isTeacherScoped(user)) return;
+
+    if (!opts.batchId) {
+      throw new BadRequestException('Teachers must select an assigned class batch');
+    }
+    const batchOk = await teacherHasBatchAccess(this.prisma, user.sub, opts.batchId);
+    if (!batchOk) {
+      throw new ForbiddenException('You are not assigned to this class');
+    }
+
+    if (opts.allSubjects) {
+      throw new ForbiddenException('Teachers can only create tests for their assigned subjects');
+    }
+
+    if (!opts.subjectId) {
+      throw new BadRequestException('Teachers must select an assigned subject');
+    }
+    const subjectOk = await teacherHasSubjectAccess(
+      this.prisma,
+      user.sub,
+      opts.batchId,
+      opts.subjectId,
+    );
+    if (!subjectOk) {
+      throw new ForbiddenException('You are not assigned to this subject');
+    }
+  }
 
   @Get('status')
   @RequirePermissions(Permission.QUESTION_CREATE)
@@ -69,9 +109,8 @@ export class AiController {
   @Post('rag/generate')
   @RequirePermissions(Permission.AI_GENERATE_TEST)
   @ApiOperation({ summary: 'Generate RAG-grounded NCERT questions' })
-  generateRagQuestions(
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser('sub') userId: string,
+  async generateRagQuestions(
+    @CurrentUser() user: JwtPayload,
     @Body() body: {
       subjectId: string;
       batchId?: string;
@@ -84,9 +123,14 @@ export class AiController {
       query?: string;
     },
   ) {
+    await this.assertTeacherCanGenerate(user, {
+      batchId: body.batchId,
+      subjectId: body.subjectId,
+    });
+
     return this.aiTestsService.generateRagQuestions({
-      tenantId,
-      userId,
+      tenantId: user.tenantId,
+      userId: user.sub,
       subjectId: body.subjectId,
       batchId: body.batchId,
       chapterIds: body.chapterIds,
@@ -102,9 +146,8 @@ export class AiController {
   @Post('tests/create')
   @RequirePermissions(Permission.AI_GENERATE_TEST)
   @ApiOperation({ summary: 'Create AI-generated test exam' })
-  createAiTest(
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser('sub') userId: string,
+  async createAiTest(
+    @CurrentUser() user: JwtPayload,
     @Body() body: {
       title: string;
       batchId?: string;
@@ -121,7 +164,21 @@ export class AiController {
       assignToBatch?: boolean;
     },
   ) {
-    return this.aiTestsService.createAiTest(tenantId, userId, body);
+    await this.assertTeacherCanGenerate(user, {
+      batchId: body.batchId,
+      subjectId: body.subjectId,
+      allSubjects: body.allSubjects,
+    });
+
+    // Teachers always generate for a single assigned subject
+    if (isTeacherScoped(user) && body.batchId && !body.subjectId) {
+      const subjects = await getTeacherSubjectIdsForBatch(this.prisma, user.sub, body.batchId);
+      if (subjects.length === 1) {
+        body = { ...body, subjectId: subjects[0], allSubjects: false };
+      }
+    }
+
+    return this.aiTestsService.createAiTest(user.tenantId, user.sub, body);
   }
 
   @Post('explain')

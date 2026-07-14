@@ -10,9 +10,10 @@ import { usersApi } from '@/lib/api';
 import { useRequireAuth } from '@/hooks/use-auth';
 import { useDebounce } from '@/hooks/use-debounce';
 import { toast } from '@/hooks/use-toast';
-import { Search, Users, Pencil, Trash2 } from 'lucide-react';
+import { Search, Users, Pencil, Trash2, School } from 'lucide-react';
 import { CreateUserDialog } from '@/components/admin/create-user-dialog';
 import { EditUserDialog, type EditableUser } from '@/components/admin/edit-user-dialog';
+import { AssignTeacherClassesDialog } from '@/components/admin/assign-teacher-classes-dialog';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Permission } from '@cbt/shared';
 import { PageHeader } from '@/components/layout/page-header';
@@ -43,6 +44,7 @@ export default function UsersPage() {
   const debouncedSearch = useDebounce(search);
   const [editUser, setEditUser] = useState<EditableUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserItem | null>(null);
+  const [assignTeacher, setAssignTeacher] = useState<UserItem | null>(null);
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['users', page, debouncedSearch],
@@ -132,7 +134,7 @@ export default function UsersPage() {
       <PageHeader
         title="Staff & Teachers"
         highlight="Teachers"
-        description="Manage institute staff accounts and role assignments"
+        description="Manage staff accounts, roles, and teacher class/subject assignments"
         badge={data ? `${items.length} on page` : 'Institute team'}
       >
         {can(Permission.USER_CREATE) && (
@@ -219,6 +221,16 @@ export default function UsersPage() {
                     </DataTableCell>
                     <DataTableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        {can(Permission.BATCH_MANAGE) && u.userRoles.some((ur) => ur.role.name === 'TEACHER') && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Assign classes & subjects"
+                            onClick={() => setAssignTeacher(u)}
+                          >
+                            <School className="h-4 w-4" />
+                          </Button>
+                        )}
                         {can(Permission.USER_UPDATE) && (
                           <Button
                             size="sm"
@@ -281,6 +293,13 @@ export default function UsersPage() {
         user={editUser}
         open={!!editUser}
         onOpenChange={(open) => { if (!open) setEditUser(null); }}
+      />
+
+      <AssignTeacherClassesDialog
+        accessToken={accessToken!}
+        teacher={assignTeacher}
+        open={!!assignTeacher}
+        onOpenChange={(open) => { if (!open) setAssignTeacher(null); }}
       />
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>

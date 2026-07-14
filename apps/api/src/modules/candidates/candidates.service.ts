@@ -19,10 +19,46 @@ export class CandidatesService {
     page?: unknown,
     limit?: unknown,
     search?: string,
-    filters?: { batchId?: string; academicClassId?: string; unassigned?: boolean },
+    filters?: {
+      batchId?: string;
+      academicClassId?: string;
+      unassigned?: boolean;
+      /** When set, only students enrolled in these batches (teacher scope). */
+      batchIds?: string[];
+    },
   ) {
     const p = parsePage(page);
     const l = parseLimit(limit);
+
+    // Teacher scope with no assignments → empty result
+    if (filters?.batchIds && filters.batchIds.length === 0) {
+      return { items: [], total: 0, page: p, limit: l, totalPages: 0 };
+    }
+
+    // Prefer explicit batchId when provided; otherwise restrict to assigned batchIds
+    const enrollmentSome = (() => {
+      if (filters?.unassigned) return undefined;
+
+      const batchConstraint = filters?.batchId
+        ? { batchId: filters.batchId }
+        : filters?.batchIds
+          ? { batchId: { in: filters.batchIds } }
+          : {};
+
+      if (filters?.academicClassId) {
+        return {
+          ...batchConstraint,
+          batch: { academicClassId: filters.academicClassId },
+        };
+      }
+
+      if (filters?.batchId || filters?.batchIds) {
+        return batchConstraint;
+      }
+
+      return undefined;
+    })();
+
     const where = {
       tenantId,
       ...(search && {
@@ -33,13 +69,8 @@ export class CandidatesService {
           { user: { lastName: { contains: search, mode: 'insensitive' as const } } },
         ],
       }),
-      ...(filters?.batchId && {
-        batchEnrollments: { some: { batchId: filters.batchId } },
-      }),
-      ...(filters?.academicClassId && {
-        batchEnrollments: {
-          some: { batch: { academicClassId: filters.academicClassId } },
-        },
+      ...(enrollmentSome && {
+        batchEnrollments: { some: enrollmentSome },
       }),
       ...(filters?.unassigned && {
         batchEnrollments: { none: {} },

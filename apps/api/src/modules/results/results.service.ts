@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { parsePage, parseLimit } from '../../common/utils/pagination.util';
 
@@ -7,6 +7,29 @@ export class ResultsService {
   private readonly subjectiveTypes = ['SUBJECTIVE', 'CASE_STUDY', 'CODING', 'AUDIO', 'VIDEO'];
 
   constructor(private prisma: PrismaService) {}
+
+  /** Teachers may only manage results for exams they created. */
+  async assertTeacherOwnsExam(examId: string, teacherUserId: string) {
+    const exam = await this.prisma.exam.findUnique({
+      where: { id: examId },
+      select: { id: true, createdById: true },
+    });
+    if (!exam) throw new NotFoundException('Exam not found');
+    if (exam.createdById !== teacherUserId) {
+      throw new ForbiddenException('You can only manage results for class tests you created');
+    }
+    return exam;
+  }
+
+  async assertTeacherOwnsSession(sessionId: string, teacherUserId: string) {
+    const session = await this.prisma.examSession.findUnique({
+      where: { id: sessionId },
+      select: { examId: true },
+    });
+    if (!session) throw new NotFoundException('Session not found');
+    await this.assertTeacherOwnsExam(session.examId, teacherUserId);
+    return session;
+  }
 
   async evaluateSession(sessionId: string) {
     const session = await this.prisma.examSession.findUnique({

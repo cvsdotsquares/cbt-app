@@ -26,6 +26,8 @@ import { TableSkeleton } from '@/components/ui/skeleton';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import { useAuthStore } from '@/stores/auth-store';
+import { isTeacherOnly, normalizeRoles } from '@/lib/roles';
 
 type CandidateItem = {
   id: string;
@@ -69,6 +71,8 @@ function getEnrollment(c: CandidateItem) {
 export default function CandidatesPage() {
   const { accessToken } = useRequireAuth(true);
   const { can } = usePermissions();
+  const { user } = useAuthStore();
+  const teacherPortal = isTeacherOnly(normalizeRoles(user?.roles));
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -83,8 +87,8 @@ export default function CandidatesPage() {
   const listFilters = useMemo(() => ({
     academicClassId: classFilter || undefined,
     batchId: batchFilter || undefined,
-    unassigned: showUnassigned || undefined,
-  }), [classFilter, batchFilter, showUnassigned]);
+    unassigned: (!teacherPortal && showUnassigned) || undefined,
+  }), [classFilter, batchFilter, showUnassigned, teacherPortal]);
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['candidates', debouncedSearch, page, listFilters],
@@ -126,7 +130,7 @@ export default function CandidatesPage() {
   const { data: kycStats } = useQuery({
     queryKey: ['candidates-stats'],
     queryFn: () => candidatesApi.stats(accessToken!) as Promise<{ total: number; verified: number; pending: number }>,
-    enabled: !!accessToken,
+    enabled: !!accessToken && !teacherPortal,
   });
 
   const kycMutation = useMutation({
@@ -161,8 +165,12 @@ export default function CandidatesPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Students"
-        description="Manage students, assign them to class batches (IX–XII), and track KYC"
+        title={teacherPortal ? 'My Students' : 'Students'}
+        description={
+          teacherPortal
+            ? 'Students enrolled in the classes you are assigned to teach'
+            : 'Manage students, assign them to class batches (IX–XII), and track KYC'
+        }
         badge={data?.total != null ? `${data.total} total` : 'NCERT · Classes 9–12'}
       >
         {can(Permission.CANDIDATE_CREATE) && (
@@ -220,18 +228,20 @@ export default function CandidatesPage() {
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={showUnassigned}
-              onChange={(e) => {
-                setShowUnassigned(e.target.checked);
-                if (e.target.checked) setBatchFilter('');
-                setPage(1);
-              }}
-            />
-            Unassigned only
-          </label>
+          {!teacherPortal && (
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showUnassigned}
+                onChange={(e) => {
+                  setShowUnassigned(e.target.checked);
+                  if (e.target.checked) setBatchFilter('');
+                  setPage(1);
+                }}
+              />
+              Unassigned only
+            </label>
+          )}
         </div>
 
       <DataTable>

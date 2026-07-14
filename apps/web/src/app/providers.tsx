@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes';
 import { useState } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthHydrationGate } from '@/components/auth/auth-hydration-gate';
+import { TenantBranding } from '@/components/layout/tenant-branding';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -20,6 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
         <AuthHydrationGate>
+          <TenantBranding />
           {children}
         </AuthHydrationGate>
         <Toaster />

@@ -21,7 +21,7 @@ const pageTitles: Record<string, string> = {
   '/dashboard/exams': 'Class Tests',
   '/dashboard/candidates': 'Students',
   '/dashboard/results': 'Results',
-  '/dashboard/teacher': 'Teacher Hub',
+  '/dashboard/teacher': 'My Classes',
   '/dashboard/questions': 'Question Bank',
   '/dashboard/users': 'Staff & Teachers',
   '/dashboard/analytics': 'Analytics',

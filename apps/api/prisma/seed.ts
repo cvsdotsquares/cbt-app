@@ -285,7 +285,28 @@ async function main() {
 
   await seedNcertCurriculum(prisma, tenant.id);
   if (seedDemoUsers && candidate.id) {
-    await seedDemoBatch(prisma, tenant.id, candidate.id);
+    const demoBatch = await seedDemoBatch(prisma, tenant.id, candidate.id);
+    const class10 = await prisma.academicClass.findFirst({ where: { level: 10 } });
+    const science = class10
+      ? await prisma.subject.findFirst({ where: { academicClassId: class10.id, code: 'SCI' } })
+      : null;
+    if (demoBatch && science) {
+      await prisma.teacherAssignment.upsert({
+        where: {
+          userId_batchId_subjectId: {
+            userId: teacherUser.id,
+            batchId: demoBatch.id,
+            subjectId: science.id,
+          },
+        },
+        update: {},
+        create: {
+          userId: teacherUser.id,
+          batchId: demoBatch.id,
+          subjectId: science.id,
+        },
+      });
+    }
   }
 
   console.log('Seed completed successfully');

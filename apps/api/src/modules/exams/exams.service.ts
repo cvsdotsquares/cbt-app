@@ -47,12 +47,16 @@ export class ExamsService {
     });
   }
 
-  async findAll(tenantId: string, page?: unknown, limit?: unknown) {
+  async findAll(tenantId: string, page?: unknown, limit?: unknown, createdById?: string) {
     const p = parsePage(page);
     const l = parseLimit(limit);
+    const where = {
+      tenantId,
+      ...(createdById ? { createdById } : {}),
+    };
     const [items, total] = await Promise.all([
       this.prisma.exam.findMany({
-        where: { tenantId },
+        where,
         include: {
           sections: {
             orderBy: { orderIndex: 'asc' },
@@ -69,7 +73,7 @@ export class ExamsService {
         take: l,
         orderBy: { startTime: 'desc' },
       }),
-      this.prisma.exam.count({ where: { tenantId } }),
+      this.prisma.exam.count({ where }),
     ]);
     return { items, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
   }

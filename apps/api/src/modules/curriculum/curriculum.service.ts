@@ -16,12 +16,15 @@ export class CurriculumService {
 
   constructor(private prisma: PrismaService) {}
 
-  async getClasses(tenantId?: string) {
-    return this.prisma.academicClass.findMany({
+  async getClasses(tenantId?: string, allowedSubjectIds?: string[]) {
+    const classes = await this.prisma.academicClass.findMany({
       where: tenantId ? { OR: [{ tenantId }, { tenantId: null }] } : undefined,
       orderBy: { level: 'asc' },
       include: {
         subjects: {
+          ...(allowedSubjectIds
+            ? { where: { id: { in: allowedSubjectIds } } }
+            : {}),
           orderBy: { orderIndex: 'asc' },
           include: {
             books: {
@@ -39,6 +42,9 @@ export class CurriculumService {
         },
       },
     });
+
+    if (!allowedSubjectIds) return classes;
+    return classes.filter((cls) => cls.subjects.length > 0);
   }
 
   async getClassTree(classId: string) {
@@ -245,11 +251,11 @@ export class CurriculumService {
   }
 
   /** Return only classes/subjects/chapters that have indexed uploads for this tenant. */
-  async getClassesFromUploads(tenantId: string) {
-    const chapterIds = await this.getUploadedChapterIdsForTenant(tenantId);
+  async getClassesFromUploads(tenantId: string, allowedSubjectIds?: string[]) {
+    const chapterIds = await this.getUploadedChapterIdsForTenant(tenantId, allowedSubjectIds);
     if (!chapterIds.size) return [];
 
-    const classes = await this.getClasses(tenantId);
+    const classes = await this.getClasses(tenantId, allowedSubjectIds);
     return classes
       .map((cls) => ({
         ...cls,
@@ -269,11 +275,22 @@ export class CurriculumService {
       .filter((cls) => cls.subjects.length > 0);
   }
 
-  async getUploadedChapterIdsForTenant(tenantId: string): Promise<Set<string>> {
+  async getUploadedChapterIdsForTenant(
+    tenantId: string,
+    allowedSubjectIds?: string[],
+  ): Promise<Set<string>> {
     const ids = new Set<string>();
 
+    if (allowedSubjectIds && allowedSubjectIds.length === 0) {
+      return ids;
+    }
+
     const materials = await this.prisma.studyMaterial.findMany({
-      where: { tenantId, status: 'READY' },
+      where: {
+        tenantId,
+        status: 'READY',
+        ...(allowedSubjectIds ? { subjectId: { in: allowedSubjectIds } } : {}),
+      },
       select: { id: true, chapterId: true, bookId: true, isFullBook: true },
     });
 

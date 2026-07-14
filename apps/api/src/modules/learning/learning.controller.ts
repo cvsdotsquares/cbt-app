@@ -1,12 +1,17 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { LearningService } from './learning.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Permission } from '@cbt/shared';
+import { Permission, type JwtPayload } from '@cbt/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  isTeacherScoped,
+  teacherHasBatchAccess,
+  teacherHasSubjectAccess,
+} from '../../common/utils/teacher-scope.util';
 
 @ApiTags('Learning')
 @Controller('learning')
@@ -38,11 +43,19 @@ export class LearningController {
   @Get('teacher/batch/:batchId/analytics')
   @RequirePermissions(Permission.LEARNING_MANAGE)
   @ApiOperation({ summary: 'Teacher batch analytics' })
-  teacherAnalytics(
+  async teacherAnalytics(
     @Param('batchId') batchId: string,
-    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser() user: JwtPayload,
     @Query('subjectId') subjectId?: string,
   ) {
-    return this.learningService.getTeacherAnalytics(tenantId, batchId, subjectId);
+    if (isTeacherScoped(user)) {
+      const allowed = await teacherHasBatchAccess(this.prisma, user.sub, batchId);
+      if (!allowed) throw new ForbiddenException('You are not assigned to this class');
+      if (subjectId) {
+        const subjectOk = await teacherHasSubjectAccess(this.prisma, user.sub, batchId, subjectId);
+        if (!subjectOk) throw new ForbiddenException('You are not assigned to this subject');
+      }
+    }
+    return this.learningService.getTeacherAnalytics(user.tenantId, batchId, subjectId);
   }
 }

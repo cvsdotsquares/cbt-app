@@ -23,6 +23,8 @@ import {
 import { TableSkeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth-store';
+import { isTeacherOnly, normalizeRoles } from '@/lib/roles';
 
 type Batch = {
   id: string;
@@ -173,6 +175,8 @@ function initials(first: string, last: string) {
 export default function BatchesPage() {
   const { accessToken } = useRequireAuth(true);
   const { can } = usePermissions();
+  const { user } = useAuthStore();
+  const teacherPortal = isTeacherOnly(normalizeRoles(user?.roles));
   const canManage = can(Permission.BATCH_MANAGE);
   const queryClient = useQueryClient();
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
@@ -211,7 +215,7 @@ export default function BatchesPage() {
     queryFn: () => batchesApi.get(accessToken!, selectedBatch!) as Promise<{
       name: string;
       academicYear: string;
-      academicClass: { id: string; name: string; level: number };
+      academicClass: { id: string; name: string; level: number; subjects?: { id: string; name: string }[] };
       enrollments: {
         id: string;
         rollNumber?: string;
@@ -362,13 +366,19 @@ export default function BatchesPage() {
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-3">
             <Badge variant="secondary" className="normal-case tracking-normal">
-              NCERT · Classes 9–12
+              {teacherPortal ? 'Teacher · Assigned classes' : 'NCERT · Classes 9–12'}
             </Badge>
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Classes <span className="gradient-text">&amp; Batches</span>
+              {teacherPortal ? (
+                <>Topic <span className="gradient-text">Progress</span></>
+              ) : (
+                <>Classes <span className="gradient-text">&amp; Batches</span></>
+              )}
             </h1>
             <p className="max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Group students by class, mark chapter progress from uploaded books, and power AI class tests from studied syllabus only.
+              {teacherPortal
+                ? 'Mark chapter progress for your assigned subjects. Topics come from NCERT books your admin uploaded.'
+                : 'Group students by class, mark chapter progress from uploaded books, and power AI class tests from studied syllabus only.'}
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               {canManage && (
@@ -377,16 +387,20 @@ export default function BatchesPage() {
                   New batch
                 </Button>
               )}
-              <Button variant="outline" asChild>
-                <Link href="/dashboard/materials">
-                  <Upload className="mr-2 h-4 w-4" /> Upload books
-                </Link>
-              </Button>
-              <Button variant="ghost" asChild>
-                <Link href="/dashboard/syllabus">
-                  <BookOpen className="mr-2 h-4 w-4" /> View syllabus
-                </Link>
-              </Button>
+              {can(Permission.MATERIAL_READ) && (
+                <Button variant="outline" asChild>
+                  <Link href="/dashboard/materials">
+                    <Upload className="mr-2 h-4 w-4" /> Upload books
+                  </Link>
+                </Button>
+              )}
+              {can(Permission.CURRICULUM_READ) && !teacherPortal && (
+                <Button variant="ghost" asChild>
+                  <Link href="/dashboard/syllabus">
+                    <BookOpen className="mr-2 h-4 w-4" /> View syllabus
+                  </Link>
+                </Button>
+              )}
             </div>
           </div>
 
@@ -1006,7 +1020,7 @@ export default function BatchesPage() {
                       <strong>{selectedBatchMeta._count.enrollments}</strong> enrolled student(s) will become unassigned.
                     </>
                   )}
-                  {' '}Syllabus progress and teacher assignments for this batch will also be deleted. Linked AI test configs are kept but no longer tied to this batch.
+                  {' '}Syllabus progress for this batch will also be deleted. Linked AI test configs are kept but no longer tied to this batch. Teacher class assignments for this batch are removed.
                 </>
               )}
             </DialogDescription>

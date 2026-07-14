@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Upload, Sparkles, Award, Settings, UserCog, ClipboardList,
-  BookOpen, School,
+  BookOpen, School, GraduationCap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Permission } from '@cbt/shared';
 import { Logo } from './logo';
+import { useAuthStore } from '@/stores/auth-store';
+import { isTeacherOnly, normalizeRoles } from '@/lib/roles';
 
 /** NCERT institute workflow — books → classes → syllabus → tests → students → results */
 export const mainNav = [
@@ -20,6 +22,17 @@ export const mainNav = [
   { href: '/dashboard/ai-tests', label: 'Create Class Test', icon: Sparkles, permission: Permission.AI_GENERATE_TEST },
   { href: '/dashboard/exams', label: 'Class Tests', icon: ClipboardList, permission: Permission.EXAM_READ },
   { href: '/dashboard/candidates', label: 'Students', icon: Users, permission: Permission.CANDIDATE_READ },
+  { href: '/dashboard/results', label: 'Results', icon: Award, permission: Permission.RESULT_READ },
+];
+
+/** Simplified teacher-only portal — books live inside Syllabus per subject */
+export const teacherNav = [
+  { href: '/dashboard/teacher', label: 'My Classes', icon: GraduationCap, permission: Permission.LEARNING_MANAGE, exact: true },
+  { href: '/dashboard/syllabus', label: 'Syllabus', icon: BookOpen, permission: Permission.CURRICULUM_READ },
+  { href: '/dashboard/batches', label: 'Topic Progress', icon: School, permission: Permission.SYLLABUS_READ },
+  { href: '/dashboard/ai-tests', label: 'Create Class Test', icon: Sparkles, permission: Permission.AI_GENERATE_TEST },
+  { href: '/dashboard/exams', label: 'Class Tests', icon: ClipboardList, permission: Permission.EXAM_READ },
+  { href: '/dashboard/candidates', label: 'My Students', icon: Users, permission: Permission.CANDIDATE_READ },
   { href: '/dashboard/results', label: 'Results', icon: Award, permission: Permission.RESULT_READ },
 ];
 
@@ -36,6 +49,10 @@ interface SidebarProps {
 export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const { can } = usePermissions();
+  const { user } = useAuthStore();
+  const teacherPortal = isTeacherOnly(normalizeRoles(user?.roles));
+  const nav = teacherPortal ? teacherNav : mainNav;
+  const showSettings = !teacherPortal && settingsNav.some((i) => can(i.permission));
 
   const renderLink = (item: (typeof mainNav)[0]) => {
     const Icon = item.icon;
@@ -81,10 +98,10 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-5 sm:py-6">
         <div className="space-y-1">
-          {mainNav.filter((i) => can(i.permission)).map(renderLink)}
+          {nav.filter((i) => can(i.permission)).map(renderLink)}
         </div>
 
-        {settingsNav.some((i) => can(i.permission)) && (
+        {showSettings && (
           <div>
             <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-sidebar-muted/80">
               Settings
@@ -98,7 +115,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
 
       <div className="border-t border-sidebar-border p-4">
         <p className="text-center text-[11px] text-sidebar-muted">
-          NCERT · Classes 9–12
+          {teacherPortal ? 'Teacher portal · Assigned subjects' : 'NCERT · Classes 9–12'}
         </p>
       </div>
     </aside>

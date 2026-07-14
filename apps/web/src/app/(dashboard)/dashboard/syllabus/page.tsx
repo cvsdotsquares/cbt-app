@@ -9,14 +9,19 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/page-header';
 import { StatCard } from '@/components/layout/stat-card';
 import { EmptyState } from '@/components/layout/data-table';
-import { curriculumApi } from '@/lib/api';
+import { curriculumApi, materialsApi } from '@/lib/api';
 import { useRequireAuth } from '@/hooks/use-auth';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { toast } from '@/hooks/use-toast';
 import {
   BookOpen, ChevronDown, ChevronRight, Upload, Layers, GraduationCap,
-  Library, Sparkles, Hash,
+  Library, Sparkles, Hash, FileText, Eye, Download, Loader2,
 } from 'lucide-react';
+import { useAuthStore } from '@/stores/auth-store';
+import { isTeacherOnly, normalizeRoles } from '@/lib/roles';
+import { usePermissions } from '@/hooks/use-permissions';
+import { Permission } from '@cbt/shared';
 
 type Topic = { id: string; title: string };
 type Chapter = { id: string; number: number; title: string; topics: Topic[] };
@@ -27,6 +32,18 @@ type AcademicClass = {
   level: number;
   name: string;
   subjects: Subject[];
+};
+
+type MaterialItem = {
+  id: string;
+  title: string;
+  fileName: string;
+  fileSize: number;
+  status: string;
+  subjectId?: string | null;
+  subject?: { id?: string; name: string; code: string } | null;
+  academicClass?: { level: number; name: string } | null;
+  chapter?: { title: string; number: number } | null;
 };
 
 const SUBJECT_ACCENTS: Record<string, string> = {
@@ -54,17 +71,54 @@ function topicCount(subject: Subject) {
   );
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function SyllabusPage() {
   const { accessToken } = useRequireAuth(true);
+  const { can } = usePermissions();
+  const { user } = useAuthStore();
+  const teacherPortal = isTeacherOnly(normalizeRoles(user?.roles));
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
   const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set());
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   const { data: classes, isLoading } = useQuery({
     queryKey: ['curriculum-from-uploads'],
     queryFn: () => curriculumApi.getClasses(accessToken!, { uploadedOnly: true }) as Promise<AcademicClass[]>,
     enabled: !!accessToken,
   });
+
+  const { data: materials } = useQuery({
+    queryKey: ['materials'],
+    queryFn: () => materialsApi.list(accessToken!) as Promise<MaterialItem[]>,
+    enabled: !!accessToken,
+  });
+
+  const materialsBySubject = useMemo(() => {
+    const map = new Map<string, MaterialItem[]>();
+    for (const m of materials ?? []) {
+      const key = m.subjectId ?? m.subject?.id;
+      if (!key) continue;
+      const list = map.get(key) ?? [];
+      list.push(m);
+      map.set(key, list);
+    }
+    return map;
+  }, [materials]);
+
+  /** Match materials to subjects when subjectId missing but subject name/code present */
+  const materialsForSubject = (subject: Subject) => {
+    const byId = materialsBySubject.get(subject.id);
+    if (byId?.length) return byId;
+    return (materials ?? []).filter((m) =>
+      m.subject?.name === subject.name || m.subject?.code === subject.code,
+    );
+  };
 
   const sortedClasses = useMemo(
     () => [...(classes ?? [])].sort((a, b) => a.level - b.level),
@@ -115,19 +169,40 @@ export default function SyllabusPage() {
     setExpandedChapters(new Set());
   }
 
+  async function viewMaterial(id: string) {
+    setOpeningId(id);
+    try {
+      await materialsApi.openFile(accessToken!, id);
+    } catch (e) {
+      toast({
+        title: 'Could not open book',
+        description: e instanceof Error ? e.message : '',
+        variant: 'destructive',
+      });
+    } finally {
+      setOpeningId(null);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="NCERT Syllabus"
         highlight="Syllabus"
-        description="Chapter tree extracted from your uploaded books. Mark studied chapters on Classes & Batches to scope AI class tests."
-        badge="Classes 9–12"
+        description={
+          teacherPortal
+            ? 'Your assigned subjects with uploaded books, chapters, and topics. View or download books here.'
+            : 'Chapter tree extracted from your uploaded books. Mark studied chapters on Classes & Batches to scope AI class tests.'
+        }
+        badge={teacherPortal ? 'Teacher · Assigned subjects' : 'Classes 9–12'}
       >
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/dashboard/materials">
-            <Upload className="mr-2 h-4 w-4" /> Upload books
-          </Link>
-        </Button>
+        {can(Permission.MATERIAL_UPLOAD) && (
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/dashboard/materials">
+              <Upload className="mr-2 h-4 w-4" /> Upload books
+            </Link>
+          </Button>
+        )}
         <Button size="sm" asChild>
           <Link href="/dashboard/batches">
             <GraduationCap className="mr-2 h-4 w-4" /> Mark progress
@@ -148,25 +223,30 @@ export default function SyllabusPage() {
         <Card className="surface-card">
           <EmptyState
             icon={BookOpen}
-            title="No syllabus extracted yet"
-            description="Upload NCERT Class 9–12 PDFs on NCERT Books. Chapters and topics are detected automatically from your files."
+            title={teacherPortal ? 'No syllabus for your subjects yet' : 'No syllabus extracted yet'}
+            description={
+              teacherPortal
+                ? 'Ask your admin to upload NCERT books for your assigned class and subject. Chapters will appear here once indexed.'
+                : 'Upload NCERT Class 9–12 PDFs on NCERT Books. Chapters and topics are detected automatically from your files.'
+            }
           />
-          <div className="flex justify-center gap-3 pb-8">
-            <Button asChild>
-              <Link href="/dashboard/materials">
-                <Upload className="mr-2 h-4 w-4" /> Upload NCERT books
-              </Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href="/dashboard/ai-tests">
-                <Sparkles className="mr-2 h-4 w-4" /> Create Class Test
-              </Link>
-            </Button>
-          </div>
+          {!teacherPortal && (
+            <div className="flex justify-center gap-3 pb-8">
+              <Button asChild>
+                <Link href="/dashboard/materials">
+                  <Upload className="mr-2 h-4 w-4" /> Upload NCERT books
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/dashboard/ai-tests">
+                  <Sparkles className="mr-2 h-4 w-4" /> Create Class Test
+                </Link>
+              </Button>
+            </div>
+          )}
         </Card>
       ) : (
         <div className="space-y-6">
-          {/* Class filter pills */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-2">
               {sortedClasses.map((cls) => {
@@ -236,6 +316,7 @@ export default function SyllabusPage() {
                   const topics = topicCount(subject);
                   const open = expandedSubjects.has(subject.id);
                   const accent = subjectAccent(subject.code);
+                  const subjectBooks = materialsForSubject(subject);
 
                   return (
                     <Card
@@ -267,6 +348,9 @@ export default function SyllabusPage() {
                                 <p className="mt-1.5 text-xs text-muted-foreground">
                                   {chapters.length} chapter{chapters.length === 1 ? '' : 's'}
                                   {topics > 0 ? ` · ${topics} topics` : ''}
+                                  {subjectBooks.length > 0
+                                    ? ` · ${subjectBooks.length} book${subjectBooks.length === 1 ? '' : 's'}`
+                                    : ''}
                                 </p>
                               </div>
                             </div>
@@ -280,65 +364,127 @@ export default function SyllabusPage() {
                       </button>
 
                       {open && (
-                        <CardContent className="space-y-2 border-t border-border/60 pt-4">
-                          {chapters.length === 0 ? (
-                            <p className="py-4 text-center text-sm text-muted-foreground">
-                              No chapters extracted for this subject yet.
+                        <CardContent className="space-y-4 border-t border-border/60 pt-4">
+                          {/* Uploaded books for this subject */}
+                          <div className="space-y-2">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Uploaded books
                             </p>
-                          ) : (
-                            chapters
-                              .slice()
-                              .sort((a, b) => a.number - b.number)
-                              .map((ch) => {
-                                const chOpen = expandedChapters.has(ch.id);
-                                const hasTopics = ch.topics.length > 0;
-                                return (
-                                  <div
-                                    key={ch.id}
-                                    className="rounded-xl border border-border/50 bg-muted/20 transition-colors hover:bg-muted/40"
-                                  >
-                                    <button
-                                      type="button"
-                                      className="flex w-full items-start gap-3 px-3.5 py-3 text-left"
-                                      onClick={() => hasTopics && toggleChapter(ch.id)}
-                                      disabled={!hasTopics}
-                                    >
-                                      <span className="mt-0.5 inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-background px-1.5 font-mono text-[11px] font-bold text-primary shadow-sm">
-                                        {ch.number}
-                                      </span>
-                                      <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-semibold leading-snug">{ch.title}</p>
-                                        {hasTopics && (
-                                          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                                            <Hash className="h-3 w-3" />
-                                            {ch.topics.length} topic{ch.topics.length === 1 ? '' : 's'}
-                                          </p>
-                                        )}
-                                      </div>
-                                      {hasTopics && (
-                                        chOpen
-                                          ? <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                                          : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                                      )}
-                                    </button>
-
-                                    {chOpen && hasTopics && (
-                                      <ul className="space-y-1 border-t border-border/40 px-3.5 py-2.5">
-                                        {ch.topics.map((t) => (
-                                          <li
-                                            key={t.id}
-                                            className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-xs text-muted-foreground"
-                                          >
-                                            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary/50" />
-                                            <span>{t.title}</span>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    )}
+                            {subjectBooks.length === 0 ? (
+                              <p className="rounded-xl border border-dashed border-border/60 px-3 py-3 text-center text-xs text-muted-foreground">
+                                No books uploaded for this subject yet.
+                              </p>
+                            ) : (
+                              subjectBooks.map((m) => (
+                                <div
+                                  key={m.id}
+                                  className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5"
+                                >
+                                  <FileText className="h-4 w-4 shrink-0 text-primary" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium">{m.title}</p>
+                                    <p className="truncate text-[11px] text-muted-foreground">
+                                      {m.chapter
+                                        ? `Ch.${m.chapter.number} ${m.chapter.title}`
+                                        : 'Complete book'}
+                                      {' · '}{formatFileSize(m.fileSize)}
+                                    </p>
                                   </div>
-                                );
-                              })
-                          )}
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 shrink-0"
+                                    title="View"
+                                    disabled={openingId === m.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void viewMaterial(m.id);
+                                    }}
+                                  >
+                                    {openingId === m.id
+                                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                                      : <Eye className="h-4 w-4" />}
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 shrink-0"
+                                    title="Download"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void materialsApi.downloadFile(accessToken!, m.id, m.fileName);
+                                    }}
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Chapters & topics
+                            </p>
+                            {chapters.length === 0 ? (
+                              <p className="py-2 text-center text-sm text-muted-foreground">
+                                No chapters extracted for this subject yet.
+                              </p>
+                            ) : (
+                              chapters
+                                .slice()
+                                .sort((a, b) => a.number - b.number)
+                                .map((ch) => {
+                                  const chOpen = expandedChapters.has(ch.id);
+                                  const hasTopics = ch.topics.length > 0;
+                                  return (
+                                    <div
+                                      key={ch.id}
+                                      className="rounded-xl border border-border/50 bg-muted/20 transition-colors hover:bg-muted/40"
+                                    >
+                                      <button
+                                        type="button"
+                                        className="flex w-full items-start gap-3 px-3.5 py-3 text-left"
+                                        onClick={() => hasTopics && toggleChapter(ch.id)}
+                                        disabled={!hasTopics}
+                                      >
+                                        <span className="mt-0.5 inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-background px-1.5 font-mono text-[11px] font-bold text-primary shadow-sm">
+                                          {ch.number}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-sm font-semibold leading-snug">{ch.title}</p>
+                                          {hasTopics && (
+                                            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                                              <Hash className="h-3 w-3" />
+                                              {ch.topics.length} topic{ch.topics.length === 1 ? '' : 's'}
+                                            </p>
+                                          )}
+                                        </div>
+                                        {hasTopics && (
+                                          chOpen
+                                            ? <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                                            : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                                        )}
+                                      </button>
+
+                                      {chOpen && hasTopics && (
+                                        <ul className="space-y-1 border-t border-border/40 px-3.5 py-2.5">
+                                          {ch.topics.map((t) => (
+                                            <li
+                                              key={t.id}
+                                              className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-xs text-muted-foreground"
+                                            >
+                                              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary/50" />
+                                              <span>{t.title}</span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                            )}
+                          </div>
                         </CardContent>
                       )}
                     </Card>
@@ -351,7 +497,11 @@ export default function SyllabusPage() {
                   <EmptyState
                     icon={Library}
                     title={`No subjects for ${activeClass.name} yet`}
-                    description="Upload books tagged to this class on NCERT Books."
+                    description={
+                      teacherPortal
+                        ? 'No assigned subjects with uploaded books for this class.'
+                        : 'Upload books tagged to this class on NCERT Books.'
+                    }
                   />
                 </Card>
               )}

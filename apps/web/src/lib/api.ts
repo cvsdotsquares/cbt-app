@@ -626,6 +626,14 @@ export const batchesApi = {
     apiFetch(`/batches/${id}`, { method: 'DELETE', ...authHeaders(token) }),
   enroll: (token: string, batchId: string, body: { candidateId: string; rollNumber?: string }) =>
     apiFetch(`/batches/${batchId}/enroll`, { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  listTeachers: (token: string, batchId: string) =>
+    apiFetch(`/batches/${batchId}/teachers`, authHeaders(token)),
+  listTeacherAssignmentsByUser: (token: string, userId?: string) =>
+    apiFetch(`/batches/teacher-assignments${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`, authHeaders(token)),
+  assignTeacher: (token: string, batchId: string, body: { userId: string; subjectId: string }) =>
+    apiFetch(`/batches/${batchId}/teachers`, { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  removeTeacher: (token: string, batchId: string, assignmentId: string) =>
+    apiFetch(`/batches/${batchId}/teachers/${assignmentId}`, { method: 'DELETE', ...authHeaders(token) }),
   getSyllabusProgress: (token: string, batchId: string, subjectId?: string) =>
     apiFetch(`/batches/${batchId}/syllabus-progress${subjectId ? `?subjectId=${subjectId}` : ''}`, authHeaders(token)),
   updateSyllabusProgress: (token: string, batchId: string, body: { chapterId?: string; topicId?: string; status: string }) =>
@@ -633,10 +641,17 @@ export const batchesApi = {
 };
 
 export const materialsApi = {
-  list: (token: string, params?: { chapterId?: string; type?: string }) => {
+  list: (token: string, params?: {
+    chapterId?: string;
+    type?: string;
+    academicClassId?: string;
+    subjectId?: string;
+  }) => {
     const q = new URLSearchParams();
     if (params?.chapterId) q.set('chapterId', params.chapterId);
     if (params?.type) q.set('type', params.type);
+    if (params?.academicClassId) q.set('academicClassId', params.academicClassId);
+    if (params?.subjectId) q.set('subjectId', params.subjectId);
     return apiFetch(`/materials?${q}`, authHeaders(token));
   },
   upload: async (token: string, formData: FormData) => {
@@ -748,6 +763,11 @@ export const tenantsApi = {
   create: (token: string, body: { name: string; slug: string; domain?: string }) =>
     apiFetch('/tenants', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
   get: (token: string, id: string) => apiFetch(`/tenants/${id}`, authHeaders(token)),
+  getMyBranding: (token: string) =>
+    apiFetch<{ id: string; name: string; branding?: { primaryColor?: string } }>(
+      '/tenants/me/branding',
+      authHeaders(token),
+    ),
   updateBranding: (token: string, id: string, branding: unknown) =>
     apiFetch(`/tenants/${id}/branding`, {
       method: 'PATCH',

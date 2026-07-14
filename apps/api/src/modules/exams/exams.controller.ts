@@ -5,7 +5,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Permission } from '@cbt/shared';
+import { Permission, type JwtPayload } from '@cbt/shared';
+import { isTeacherScoped } from '../../common/utils/teacher-scope.util';
 
 @ApiTags('Exams')
 @Controller('exams')
@@ -41,11 +42,12 @@ export class ExamsController {
   @Get()
   @RequirePermissions(Permission.EXAM_READ)
   findAll(
-    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser() user: JwtPayload,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.examsService.findAll(tenantId, page, limit);
+    const createdById = isTeacherScoped(user) ? user.sub : undefined;
+    return this.examsService.findAll(user.tenantId, page, limit, createdById);
   }
 
   @Get(':id')

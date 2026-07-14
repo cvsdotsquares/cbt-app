@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState, useMemo } from 'react';
+import { useRef, useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,12 +11,16 @@ import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/layout/page-header';
 import { materialsApi, curriculumApi } from '@/lib/api';
 import { useRequireAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
+import { Permission } from '@cbt/shared';
 import { toast } from '@/hooks/use-toast';
 import {
   Upload, FileText, RefreshCw, Trash2, Loader2, Eye, Download, BookOpen, Shield, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TableSkeleton } from '@/components/ui/skeleton';
+import { useAuthStore } from '@/stores/auth-store';
+import { isTeacherOnly, normalizeRoles } from '@/lib/roles';
 
 type Material = {
   id: string;
@@ -71,6 +76,12 @@ function formatFileSize(bytes: number): string {
 
 export default function MaterialsPage() {
   const { accessToken } = useRequireAuth(true);
+  const { can } = usePermissions();
+  const { user } = useAuthStore();
+  const router = useRouter();
+  const teacherPortal = isTeacherOnly(normalizeRoles(user?.roles));
+  const canUpload = can(Permission.MATERIAL_UPLOAD);
+  const canDelete = can(Permission.MATERIAL_DELETE);
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -85,6 +96,13 @@ export default function MaterialsPage() {
     chapterId: '',
     academicSession: '2025-26',
   });
+
+  // Teachers view/download books inside Syllabus — no separate NCERT panel
+  useEffect(() => {
+    if (teacherPortal) router.replace('/dashboard/syllabus');
+  }, [teacherPortal, router]);
+
+  if (teacherPortal) return null;
 
   const { data: materials, isLoading } = useQuery({
     queryKey: ['materials'],
@@ -233,17 +251,22 @@ export default function MaterialsPage() {
     },
   });
 
-  const canUpload = pendingFiles.length > 0 && meta.academicClassId && meta.subjectId;
+  const canSubmitUpload = pendingFiles.length > 0 && meta.academicClassId && meta.subjectId;
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="NCERT Books & Notes"
         highlight="Books & Notes"
-        description="Upload Class 9–12 NCERT PDFs — complete books or chapter files. Chapters are extracted from your files and power AI class tests."
-        badge="NCERT · Classes 9–12"
+        description={
+          teacherPortal
+            ? 'View and download NCERT books uploaded for your assigned class and subject.'
+            : 'Upload Class 9–12 NCERT PDFs — complete books or chapter files. Chapters are extracted from your files and power AI class tests.'
+        }
+        badge={teacherPortal ? 'Teacher · Assigned subjects' : 'NCERT · Classes 9–12'}
       />
 
+      {canUpload && (
       <Card className="border-primary/20 bg-primary/[0.03]">
         <CardContent className="flex gap-3 p-4 text-sm">
           <Shield className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
@@ -256,7 +279,9 @@ export default function MaterialsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
+      {canUpload && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -449,7 +474,7 @@ export default function MaterialsPage() {
           <Button
             className="w-full"
             size="lg"
-            disabled={!canUpload || uploadMutation.isPending}
+            disabled={!canSubmitUpload || uploadMutation.isPending}
             onClick={() => uploadMutation.mutate()}
           >
             {uploadMutation.isPending
@@ -462,13 +487,14 @@ export default function MaterialsPage() {
           </Button>
         </CardContent>
       </Card>
+      )}
 
       {isLoading ? (
         <TableSkeleton rows={3} />
       ) : (materials ?? []).length > 0 ? (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Your documents ({materials?.length})
+            {teacherPortal ? 'Books for your subjects' : 'Your documents'} ({materials?.length})
           </h2>
           {(materials ?? []).map((m) => (
             <Card key={m.id}>
@@ -508,12 +534,16 @@ export default function MaterialsPage() {
                 <Button size="icon" variant="ghost" title="Download" onClick={() => materialsApi.downloadFile(accessToken!, m.id, m.fileName)}>
                   <Download className="h-4 w-4" />
                 </Button>
+                {canUpload && (
                 <Button size="icon" variant="ghost" onClick={() => materialsApi.reindex(accessToken!, m.id).then(() => queryClient.invalidateQueries({ queryKey: ['materials'] }))}>
                   <RefreshCw className="h-4 w-4" />
                 </Button>
+                )}
+                {canDelete && (
                 <Button size="icon" variant="ghost" onClick={() => materialsApi.delete(accessToken!, m.id).then(() => queryClient.invalidateQueries({ queryKey: ['materials'] }))}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -521,7 +551,9 @@ export default function MaterialsPage() {
       ) : (
         <Card className="border-dashed">
           <CardContent className="py-12 text-center text-muted-foreground">
-            No documents yet. Upload a book for a class and subject — chapters will be extracted automatically.
+            {teacherPortal
+              ? 'No books for your assigned subjects yet. Ask your admin to upload NCERT books for your class and subject.'
+              : 'No documents yet. Upload a book for a class and subject — chapters will be extracted automatically.'}
           </CardContent>
         </Card>
       )}

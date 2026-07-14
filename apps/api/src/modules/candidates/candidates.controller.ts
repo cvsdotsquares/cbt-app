@@ -1,23 +1,28 @@
-import { Controller, Get, Post, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Query, Body, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { CandidatesService } from './candidates.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Permission } from '@cbt/shared';
+import { Permission, type JwtPayload } from '@cbt/shared';
+import { getTeacherBatchIds, isTeacherScoped } from '../../common/utils/teacher-scope.util';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @ApiTags('Candidates')
 @Controller('candidates')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class CandidatesController {
-  constructor(private candidatesService: CandidatesService) {}
+  constructor(
+    private candidatesService: CandidatesService,
+    private prisma: PrismaService,
+  ) {}
 
   @Get()
   @RequirePermissions(Permission.CANDIDATE_READ)
-  findAll(
-    @CurrentUser('tenantId') tenantId: string,
+  async findAll(
+    @CurrentUser() user: JwtPayload,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
@@ -25,10 +30,24 @@ export class CandidatesController {
     @Query('academicClassId') academicClassId?: string,
     @Query('unassigned') unassigned?: string,
   ) {
-    return this.candidatesService.findAll(tenantId, page, limit, search, {
+    const teacherScoped = isTeacherScoped(user);
+    let batchIds: string[] | undefined;
+    if (teacherScoped) {
+      batchIds = await getTeacherBatchIds(this.prisma, user.sub);
+      // Teachers cannot browse unassigned students tenant-wide
+      if (unassigned === 'true' || unassigned === '1') {
+        throw new ForbiddenException('Teachers can only view students in their assigned classes');
+      }
+      if (batchId && !batchIds.includes(batchId)) {
+        throw new ForbiddenException('You are not assigned to this class');
+      }
+    }
+
+    return this.candidatesService.findAll(user.tenantId, page, limit, search, {
       batchId,
       academicClassId,
       unassigned: unassigned === 'true' || unassigned === '1',
+      batchIds: teacherScoped ? batchIds : undefined,
     });
   }
 

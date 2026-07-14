@@ -5,24 +5,25 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/auth-store';
 import { tenantsApi } from '@/lib/api';
 import { applyTenantPrimaryColor } from '@/lib/tenant-branding';
-import { Permission } from '@cbt/shared';
-import { usePermissions } from '@/hooks/use-permissions';
 
 type TenantBrandingData = {
   branding?: { primaryColor?: string };
 };
 
-/** Loads tenant branding and applies primary color across the dashboard. */
+/**
+ * Loads institute branding for any signed-in user (admin, teacher, student)
+ * and applies primary color CSS variables across the app.
+ */
 export function TenantBranding() {
   const accessToken = useAuthStore((s) => s.accessToken);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const tenantId = useAuthStore((s) => s.user?.tenantId);
-  const { can } = usePermissions();
-  const canReadTenant = can(Permission.TENANT_READ);
 
   const { data: tenant } = useQuery({
-    queryKey: ['tenant', tenantId],
-    queryFn: () => tenantsApi.get(accessToken!, tenantId!) as Promise<TenantBrandingData>,
-    enabled: !!accessToken && !!tenantId && canReadTenant,
+    queryKey: ['tenant-branding', tenantId],
+    queryFn: () => tenantsApi.getMyBranding(accessToken!) as Promise<TenantBrandingData>,
+    enabled: !!accessToken && !!tenantId && isAuthenticated,
+    staleTime: 60_000,
   });
 
   useEffect(() => {

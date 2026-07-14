@@ -33,6 +33,15 @@ export class TenantsService {
     return tenant;
   }
 
+  async getBranding(id: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id },
+      select: { id: true, name: true, branding: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return tenant;
+  }
+
   async updateBranding(id: string, branding: Record<string, unknown>) {
     const existing = await this.prisma.tenant.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Tenant not found');

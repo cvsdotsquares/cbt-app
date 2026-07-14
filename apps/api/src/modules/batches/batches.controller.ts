@@ -5,7 +5,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Permission } from '@cbt/shared';
+import { Permission, type JwtPayload } from '@cbt/shared';
+import { isTeacherScoped } from '../../common/utils/teacher-scope.util';
 
 @ApiTags('Batches')
 @Controller('batches')
@@ -14,16 +15,30 @@ import { Permission } from '@cbt/shared';
 export class BatchesController {
   constructor(private batchesService: BatchesService) {}
 
+  private teacherScope(user: JwtPayload) {
+    return isTeacherScoped(user) ? user.sub : undefined;
+  }
+
   @Get()
   @RequirePermissions(Permission.BATCH_READ)
-  findAll(@CurrentUser('tenantId') tenantId: string) {
-    return this.batchesService.findAll(tenantId);
+  findAll(@CurrentUser() user: JwtPayload) {
+    return this.batchesService.findAll(user.tenantId, this.teacherScope(user));
+  }
+
+  @Get('teacher-assignments')
+  @RequirePermissions(Permission.BATCH_MANAGE)
+  @ApiOperation({ summary: 'List teacher↔batch↔subject assignments (optional userId filter)' })
+  listTeacherAssignmentsByUser(
+    @CurrentUser('tenantId') tenantId: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.batchesService.listTeacherAssignmentsByUser(tenantId, userId);
   }
 
   @Get(':id')
   @RequirePermissions(Permission.BATCH_READ)
-  findOne(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
-    return this.batchesService.findOne(id, tenantId);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.batchesService.findOne(id, user.tenantId, this.teacherScope(user));
   }
 
   @Post()
@@ -63,37 +78,63 @@ export class BatchesController {
     return this.batchesService.enrollStudent(id, tenantId, body.candidateId, body.rollNumber);
   }
 
+  @Get(':id/teachers')
+  @RequirePermissions(Permission.BATCH_READ)
+  @ApiOperation({ summary: 'List teachers assigned to a batch' })
+  listTeachers(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string) {
+    return this.batchesService.listTeacherAssignments(id, tenantId);
+  }
+
   @Post(':id/teachers')
   @RequirePermissions(Permission.BATCH_MANAGE)
+  @ApiOperation({ summary: 'Assign a teacher to a subject in a batch' })
   assignTeacher(
     @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
     @Body() body: { userId: string; subjectId: string },
   ) {
-    return this.batchesService.assignTeacher(id, body.userId, body.subjectId);
+    return this.batchesService.assignTeacher(id, tenantId, body.userId, body.subjectId);
+  }
+
+  @Delete(':id/teachers/:assignmentId')
+  @RequirePermissions(Permission.BATCH_MANAGE)
+  @ApiOperation({ summary: 'Remove a teacher assignment from a batch' })
+  removeTeacher(
+    @Param('id') id: string,
+    @Param('assignmentId') assignmentId: string,
+    @CurrentUser('tenantId') tenantId: string,
+  ) {
+    return this.batchesService.removeTeacher(id, tenantId, assignmentId);
   }
 
   @Get(':id/syllabus-progress')
   @RequirePermissions(Permission.SYLLABUS_READ)
   getSyllabusProgress(
     @Param('id') id: string,
-    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser() user: JwtPayload,
     @Query('subjectId') subjectId?: string,
   ) {
-    return this.batchesService.getSyllabusProgress(id, tenantId, subjectId);
+    return this.batchesService.getSyllabusProgress(
+      id,
+      user.tenantId,
+      subjectId,
+      this.teacherScope(user),
+    );
   }
 
   @Patch(':id/syllabus-progress')
   @RequirePermissions(Permission.SYLLABUS_MANAGE)
   updateSyllabusProgress(
     @Param('id') id: string,
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser() user: JwtPayload,
     @Body() body: { chapterId?: string; topicId?: string; status: string },
   ) {
     return this.batchesService.updateSyllabusProgress(
-      id, tenantId,
+      id,
+      user.tenantId,
       { ...body, status: body.status as never },
-      userId,
+      user.sub,
+      this.teacherScope(user),
     );
   }
 
@@ -101,12 +142,16 @@ export class BatchesController {
   @RequirePermissions(Permission.SYLLABUS_MANAGE)
   bulkUpdate(
     @Param('id') id: string,
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser() user: JwtPayload,
     @Body() body: { chapterIds: string[]; status: string },
   ) {
     return this.batchesService.bulkUpdateChapterProgress(
-      id, tenantId, body.chapterIds, body.status as never, userId,
+      id,
+      user.tenantId,
+      body.chapterIds,
+      body.status as never,
+      user.sub,
+      this.teacherScope(user),
     );
   }
 }

@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
+import { useAuthStore } from '@/stores/auth-store';
+import { isTeacherOnly, normalizeRoles } from '@/lib/roles';
 
 function questionCount(exam: ExamListItem) {
   return (exam.sections || []).reduce((sum, s) => sum + (s._count?.questions ?? 0), 0);
@@ -33,6 +35,8 @@ function questionCount(exam: ExamListItem) {
 export default function ResultsPage() {
   const { accessToken } = useRequireAuth(true);
   const { can } = usePermissions();
+  const { user } = useAuthStore();
+  const teacherPortal = isTeacherOnly(normalizeRoles(user?.roles));
   const queryClient = useQueryClient();
   const [selectedExam, setSelectedExam] = useState('');
   const [showGrading, setShowGrading] = useState(false);
@@ -140,8 +144,12 @@ export default function ResultsPage() {
       <div className="space-y-8">
         <PageHeader
           title="Results"
-          description="Review scores, ranks, and publish results for NCERT class tests."
-          badge="NCERT · Classes 9–12"
+          description={
+            teacherPortal
+              ? 'Review scores for your class tests and publish results so students can see them.'
+              : 'Review scores, ranks, and publish results for NCERT class tests.'
+          }
+          badge={teacherPortal ? 'Teacher · Your tests' : 'NCERT · Classes 9–12'}
         />
 
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">

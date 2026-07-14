@@ -39,7 +39,16 @@ export function getPermissionForPath(pathname: string): Permission | null {
 
 export function getDefaultDashboardPath(
   can: (permission: Permission | string) => boolean,
+  roles?: string[],
 ): string {
+  // Pure teachers land on the simplified teacher hub
+  if (
+    roles?.includes('TEACHER')
+    && !roles.some((r) => ['SUPER_ADMIN', 'ORG_ADMIN', 'INSTITUTE_ADMIN', 'EXAM_MANAGER'].includes(r))
+  ) {
+    if (can(Permission.LEARNING_MANAGE)) return '/dashboard/teacher';
+  }
+
   // Narrow staff roles without dashboard home access
   if (can(Permission.PROCTORING_MONITOR) && !can(Permission.ANALYTICS_VIEW)) {
     return '/dashboard/monitoring';
