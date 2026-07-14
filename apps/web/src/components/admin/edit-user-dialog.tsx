@@ -18,6 +18,7 @@ export type EditableUser = {
   lastName: string;
   email: string;
   status: string;
+  roleId: string;
 };
 
 interface EditUserDialogProps {
@@ -25,9 +26,18 @@ interface EditUserDialogProps {
   user: EditableUser | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  roles: { id: string; name: string }[];
+  canAssignRole?: boolean;
 }
 
-export function EditUserDialog({ accessToken, user, open, onOpenChange }: EditUserDialogProps) {
+export function EditUserDialog({
+  accessToken,
+  user,
+  open,
+  onOpenChange,
+  roles,
+  canAssignRole = true,
+}: EditUserDialogProps) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
     firstName: '',
@@ -35,6 +45,7 @@ export function EditUserDialog({ accessToken, user, open, onOpenChange }: EditUs
     email: '',
     status: 'ACTIVE',
     password: '',
+    roleId: '',
   });
 
   useEffect(() => {
@@ -45,6 +56,7 @@ export function EditUserDialog({ accessToken, user, open, onOpenChange }: EditUs
         email: user.email,
         status: user.status,
         password: '',
+        roleId: user.roleId,
       });
     }
   }, [user]);
@@ -58,6 +70,7 @@ export function EditUserDialog({ accessToken, user, open, onOpenChange }: EditUs
         email: form.email,
         status: form.status,
         ...(form.password.trim() ? { password: form.password } : {}),
+        ...(canAssignRole ? { roleId: form.roleId || null } : {}),
       });
     },
     onSuccess: () => {
@@ -73,23 +86,55 @@ export function EditUserDialog({ accessToken, user, open, onOpenChange }: EditUs
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit user</DialogTitle>
-          <DialogDescription>Update profile details, status, or reset password.</DialogDescription>
+          <DialogDescription>Update profile, role, status, or reset password.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label>First name</Label>
-              <Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+              <Input
+                name="edit-staff-first-name"
+                autoComplete="off"
+                value={form.firstName}
+                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              />
             </div>
             <div>
               <Label>Last name</Label>
-              <Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+              <Input
+                name="edit-staff-last-name"
+                autoComplete="off"
+                value={form.lastName}
+                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+              />
             </div>
           </div>
           <div>
             <Label>Email</Label>
-            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <Input
+              type="email"
+              name="edit-staff-email"
+              autoComplete="off"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
           </div>
+          {canAssignRole && (
+            <div>
+              <Label>Role</Label>
+              <select
+                className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={form.roleId}
+                onChange={(e) => setForm({ ...form, roleId: e.target.value })}
+              >
+                <option value="">None</option>
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">Each staff member has one role.</p>
+            </div>
+          )}
           <div>
             <Label>Status</Label>
             <select
@@ -106,6 +151,8 @@ export function EditUserDialog({ accessToken, user, open, onOpenChange }: EditUs
           <div>
             <Label>New password (optional)</Label>
             <PasswordInput
+              name="edit-staff-new-password"
+              autoComplete="new-password"
               placeholder="Leave blank to keep current password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}

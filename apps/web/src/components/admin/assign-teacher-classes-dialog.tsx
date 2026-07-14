@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/dialog';
 import { batchesApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
-import { School, Trash2 } from 'lucide-react';
+import { School, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type TeachingAssignment = {
   id: string;
@@ -53,7 +54,7 @@ export function AssignTeacherClassesDialog({
 }: AssignTeacherClassesDialogProps) {
   const queryClient = useQueryClient();
   const [batchId, setBatchId] = useState('');
-  const [subjectId, setSubjectId] = useState('');
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
 
   const { data: batches } = useQuery({
     queryKey: ['batches'],
@@ -78,6 +79,20 @@ export function AssignTeacherClassesDialog({
 
   const subjects = batchDetail?.academicClass.subjects ?? [];
 
+  const assignedSubjectIdsForBatch = useMemo(() => {
+    if (!batchId) return new Set<string>();
+    return new Set(
+      (assignments ?? [])
+        .filter((a) => a.batchId === batchId)
+        .map((a) => a.subjectId),
+    );
+  }, [assignments, batchId]);
+
+  const availableSubjects = useMemo(
+    () => subjects.filter((s) => !assignedSubjectIdsForBatch.has(s.id)),
+    [subjects, assignedSubjectIdsForBatch],
+  );
+
   const sortedBatches = useMemo(
     () =>
       [...(batches ?? [])].sort(
@@ -88,18 +103,51 @@ export function AssignTeacherClassesDialog({
     [batches],
   );
 
+  const assignmentsByBatch = useMemo(() => {
+    const map = new Map<string, {
+      batchId: string;
+      label: string;
+      year: string;
+      items: TeachingAssignment[];
+    }>();
+    for (const a of assignments ?? []) {
+      const key = a.batchId;
+      const existing = map.get(key);
+      if (existing) {
+        existing.items.push(a);
+      } else {
+        map.set(key, {
+          batchId: a.batchId,
+          label: `${a.batch.academicClass.name} — ${a.batch.name}`,
+          year: a.batch.academicYear,
+          items: [a],
+        });
+      }
+    }
+    return [...map.values()];
+  }, [assignments]);
+
+  function invalidateAssignments() {
+    queryClient.invalidateQueries({ queryKey: ['teacher-assignments', teacher?.id] });
+    queryClient.invalidateQueries({ queryKey: ['batch-teachers'] });
+    queryClient.invalidateQueries({ queryKey: ['batches'] });
+    queryClient.invalidateQueries({ queryKey: ['users'] });
+  }
+
   const assignMutation = useMutation({
     mutationFn: () =>
       batchesApi.assignTeacher(accessToken, batchId, {
         userId: teacher!.id,
-        subjectId,
+        subjectIds: selectedSubjectIds,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teacher-assignments', teacher?.id] });
-      queryClient.invalidateQueries({ queryKey: ['batch-teachers'] });
-      queryClient.invalidateQueries({ queryKey: ['batches'] });
-      setSubjectId('');
-      toast({ title: 'Class assigned', variant: 'success' });
+      invalidateAssignments();
+      setSelectedSubjectIds([]);
+      toast({
+        title: 'Batch assigned',
+        description: 'Pick another batch below to assign more classes.',
+        variant: 'success',
+      });
     },
     onError: (e: Error) =>
       toast({ title: 'Could not assign', description: e.message, variant: 'destructive' }),
@@ -109,9 +157,7 @@ export function AssignTeacherClassesDialog({
     mutationFn: (a: TeachingAssignment) =>
       batchesApi.removeTeacher(accessToken, a.batchId, a.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teacher-assignments', teacher?.id] });
-      queryClient.invalidateQueries({ queryKey: ['batch-teachers'] });
-      queryClient.invalidateQueries({ queryKey: ['batches'] });
+      invalidateAssignments();
       toast({ title: 'Assignment removed', variant: 'success' });
     },
     onError: (e: Error) =>
@@ -121,14 +167,24 @@ export function AssignTeacherClassesDialog({
   function handleOpenChange(next: boolean) {
     if (!next) {
       setBatchId('');
-      setSubjectId('');
+      setSelectedSubjectIds([]);
     }
     onOpenChange(next);
   }
 
+  function toggleSubject(id: string) {
+    setSelectedSubjectIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  function selectAllAvailable() {
+    setSelectedSubjectIds(availableSubjects.map((s) => s.id));
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <School className="h-5 w-5 text-primary" />
@@ -141,7 +197,7 @@ export function AssignTeacherClassesDialog({
                 <span className="font-medium text-foreground">
                   {teacher.firstName} {teacher.lastName}
                 </span>{' '}
-                to a batch and subject. They will only see that class’s syllabus, books, students, and tests.
+                to as many batches as you need. Each batch needs at least one subject.
               </>
             )}
           </DialogDescription>
@@ -156,77 +212,130 @@ export function AssignTeacherClassesDialog({
                 value={batchId}
                 onChange={(e) => {
                   setBatchId(e.target.value);
-                  setSubjectId('');
+                  setSelectedSubjectIds([]);
                 }}
               >
                 <option value="">Choose batch…</option>
-                {sortedBatches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.academicClass.name} — {b.name} ({b.academicYear})
-                  </option>
-                ))}
+                {sortedBatches.map((b) => {
+                  const assignedCount = (assignments ?? []).filter((a) => a.batchId === b.id).length;
+                  return (
+                    <option key={b.id} value={b.id}>
+                      {b.academicClass.name} — {b.name} ({b.academicYear})
+                      {assignedCount ? ` · ${assignedCount} subject${assignedCount === 1 ? '' : 's'} assigned` : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
+
             <div>
-              <label className="text-xs font-semibold text-muted-foreground">Subject</label>
-              <select
-                className="mt-1.5 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                value={subjectId}
-                disabled={!batchId}
-                onChange={(e) => setSubjectId(e.target.value)}
-              >
-                <option value="">Choose subject…</option>
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-semibold text-muted-foreground">Subjects</label>
+                {availableSubjects.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-primary hover:underline"
+                    onClick={selectAllAvailable}
+                  >
+                    Select all
+                  </button>
+                )}
+              </div>
+              {!batchId ? (
+                <p className="mt-2 text-sm text-muted-foreground">Choose a batch first.</p>
+              ) : availableSubjects.length === 0 ? (
+                <p className="mt-2 rounded-lg border border-dashed border-border/60 px-3 py-3 text-sm text-muted-foreground">
+                  {subjects.length === 0
+                    ? 'No subjects for this class yet. Upload NCERT books first.'
+                    : 'All subjects in this batch are already assigned. Pick another batch to continue.'}
+                </p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {availableSubjects.map((s) => {
+                    const selected = selectedSubjectIds.includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => toggleSubject(s.id)}
+                        className={cn(
+                          'rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                          selected
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground',
+                        )}
+                      >
+                        {s.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+
             <Button
               className="w-full"
-              disabled={!batchId || !subjectId || assignMutation.isPending || !teacher}
+              disabled={
+                !batchId
+                || selectedSubjectIds.length === 0
+                || assignMutation.isPending
+                || !teacher
+              }
               onClick={() => assignMutation.mutate()}
             >
-              {assignMutation.isPending ? 'Assigning…' : 'Assign class & subject'}
+              {assignMutation.isPending
+                ? 'Assigning…'
+                : selectedSubjectIds.length > 1
+                  ? `Assign ${selectedSubjectIds.length} subjects to this batch`
+                  : 'Assign to this batch'}
             </Button>
+            <p className="text-center text-[11px] text-muted-foreground">
+              After assigning, choose another batch to add more classes.
+            </p>
           </div>
 
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Current assignments ({assignments?.length ?? 0})
+              Current assignments · {assignmentsByBatch.length} batch
+              {assignmentsByBatch.length === 1 ? '' : 'es'}
             </p>
             {isLoading ? (
               <p className="py-4 text-center text-sm text-muted-foreground">Loading…</p>
-            ) : (assignments ?? []).length === 0 ? (
+            ) : assignmentsByBatch.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border/60 px-3 py-6 text-center text-sm text-muted-foreground">
-                No classes assigned yet.
+                No classes assigned yet. Add the first batch above.
               </p>
             ) : (
-              (assignments ?? []).map((a) => (
+              assignmentsByBatch.map((group) => (
                 <div
-                  key={a.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border/60 px-3 py-2.5"
+                  key={group.batchId}
+                  className="rounded-xl border border-border/60 px-3 py-2.5 space-y-2"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">
-                      {a.batch.academicClass.name} — {a.batch.name}
-                    </p>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      <Badge variant="secondary" className="normal-case tracking-normal">
-                        {a.subject.name}
-                      </Badge>
-                      <span className="text-[11px] text-muted-foreground">{a.batch.academicYear}</span>
-                    </div>
+                    <p className="truncate text-sm font-semibold">{group.label}</p>
+                    <p className="text-[11px] text-muted-foreground">{group.year}</p>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="shrink-0 text-destructive"
-                    disabled={removeMutation.isPending}
-                    title="Remove assignment"
-                    onClick={() => removeMutation.mutate(a)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.items.map((a) => (
+                      <Badge
+                        key={a.id}
+                        variant="secondary"
+                        className="gap-1 pr-1 normal-case tracking-normal"
+                      >
+                        {a.subject.name}
+                        <button
+                          type="button"
+                          className="ml-0.5 rounded-full p-0.5 hover:bg-muted"
+                          disabled={removeMutation.isPending}
+                          title={`Remove ${a.subject.name}`}
+                          aria-label={`Remove ${a.subject.name}`}
+                          onClick={() => removeMutation.mutate(a)}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               ))
             )}

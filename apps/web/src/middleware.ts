@@ -69,6 +69,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(staffHome(roles), request.url));
   }
 
+  if (pathname === '/help' || pathname.startsWith('/help/')) {
+    if (isAdminUser) {
+      return NextResponse.redirect(new URL('/dashboard/guide', request.url));
+    }
+  }
+
+  if (pathname === '/dashboard/guide' && !isAdminUser) {
+    return NextResponse.redirect(new URL('/help', request.url));
+  }
+
   return NextResponse.next();
 }
 

@@ -13,6 +13,14 @@ import { usersApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { Plus } from 'lucide-react';
 
+const EMPTY_FORM = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  password: '',
+  roleId: '',
+};
+
 interface CreateUserDialogProps {
   accessToken: string;
   roles: { id: string; name: string }[];
@@ -21,9 +29,16 @@ interface CreateUserDialogProps {
 export function CreateUserDialog({ accessToken, roles }: CreateUserDialogProps) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    firstName: '', lastName: '', email: '', password: '', roleId: '',
-  });
+  const [formKey, setFormKey] = useState(0);
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setForm({ ...EMPTY_FORM });
+      setFormKey((k) => k + 1);
+    }
+  }
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -38,13 +53,13 @@ export function CreateUserDialog({ accessToken, roles }: CreateUserDialogProps) 
       queryClient.invalidateQueries({ queryKey: ['users'] });
       toast({ title: 'User created', variant: 'success' });
       setOpen(false);
-      setForm({ firstName: '', lastName: '', email: '', password: '', roleId: '' });
+      setForm({ ...EMPTY_FORM });
     },
     onError: (e: Error) => toast({ title: 'Failed', description: e.message, variant: 'destructive' }),
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button><Plus className="mr-2 h-4 w-4" /> Add User</Button>
       </DialogTrigger>
@@ -53,15 +68,61 @@ export function CreateUserDialog({ accessToken, roles }: CreateUserDialogProps) 
           <DialogTitle>Create User</DialogTitle>
           <DialogDescription>Add a new staff user to your organization.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-2">
+        {/* Remount + non-login autocomplete tokens stop the browser from injecting saved credentials */}
+        <form
+          key={formKey}
+          className="grid gap-4 py-2"
+          autoComplete="off"
+          onSubmit={(e) => {
+            e.preventDefault();
+            createMutation.mutate();
+          }}
+        >
+          {/* Decoy fields — browsers often target the first email/password pair on the page */}
+          <input type="text" name="username" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden="true" />
+          <input type="password" name="password" autoComplete="current-password" className="hidden" tabIndex={-1} aria-hidden="true" />
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div><Label>First Name</Label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
-            <div><Label>Last Name</Label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
+            <div>
+              <Label>First Name</Label>
+              <Input
+                name="new-staff-first-name"
+                autoComplete="off"
+                value={form.firstName}
+                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Last Name</Label>
+              <Input
+                name="new-staff-last-name"
+                autoComplete="off"
+                value={form.lastName}
+                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+              />
+            </div>
           </div>
-          <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-          <div><Label>Password</Label><PasswordInput value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
           <div>
-            <Label>Initial Role</Label>
+            <Label>Email</Label>
+            <Input
+              type="email"
+              name="new-staff-email"
+              autoComplete="off"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Password</Label>
+            <PasswordInput
+              name="new-staff-password"
+              autoComplete="new-password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Role</Label>
             <select
               className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={form.roleId}
@@ -70,17 +131,18 @@ export function CreateUserDialog({ accessToken, roles }: CreateUserDialogProps) 
               <option value="">None</option>
               {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
+            <p className="mt-1 text-xs text-muted-foreground">Each staff member has one role.</p>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending || !form.email || !form.password || !form.firstName}
-          >
-            {createMutation.isPending ? 'Creating...' : 'Create User'}
-          </Button>
-        </DialogFooter>
+          <DialogFooter className="px-0">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button
+              type="submit"
+              disabled={createMutation.isPending || !form.email || !form.password || !form.firstName}
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create User'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

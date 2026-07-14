@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Upload, Sparkles, Award, Settings, UserCog, ClipboardList,
-  BookOpen, School, GraduationCap,
+  BookOpen, School, CircleHelp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -27,7 +27,7 @@ export const mainNav = [
 
 /** Simplified teacher-only portal — books live inside Syllabus per subject */
 export const teacherNav = [
-  { href: '/dashboard/teacher', label: 'My Classes', icon: GraduationCap, permission: Permission.LEARNING_MANAGE, exact: true },
+  { href: '/dashboard/teacher', label: 'Home', icon: LayoutDashboard, permission: Permission.LEARNING_MANAGE, exact: true },
   { href: '/dashboard/syllabus', label: 'Syllabus', icon: BookOpen, permission: Permission.CURRICULUM_READ },
   { href: '/dashboard/batches', label: 'Topic Progress', icon: School, permission: Permission.SYLLABUS_READ },
   { href: '/dashboard/ai-tests', label: 'Create Class Test', icon: Sparkles, permission: Permission.AI_GENERATE_TEST },
@@ -54,7 +54,12 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   const nav = teacherPortal ? teacherNav : mainNav;
   const showSettings = !teacherPortal && settingsNav.some((i) => can(i.permission));
 
-  const renderLink = (item: (typeof mainNav)[0]) => {
+  const renderLink = (item: {
+    href: string;
+    label: string;
+    icon: typeof CircleHelp;
+    exact?: boolean;
+  }) => {
     const Icon = item.icon;
     const isActive = item.exact
       ? pathname === item.href
@@ -96,21 +101,31 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         <Logo variant="light" />
       </div>
 
-      <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-5 sm:py-6">
-        <div className="space-y-1">
-          {nav.filter((i) => can(i.permission)).map(renderLink)}
+      <nav className="flex flex-1 flex-col overflow-y-auto px-4 py-5 sm:py-6">
+        <div className="flex-1 space-y-6">
+          <div className="space-y-1">
+            {nav.filter((i) => can(i.permission)).map(renderLink)}
+          </div>
+
+          {showSettings && (
+            <div>
+              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-sidebar-muted/80">
+                Settings
+              </p>
+              <div className="space-y-1">
+                {settingsNav.filter((i) => can(i.permission)).map(renderLink)}
+              </div>
+            </div>
+          )}
         </div>
 
-        {showSettings && (
-          <div>
-            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-sidebar-muted/80">
-              Settings
-            </p>
-            <div className="space-y-1">
-              {settingsNav.filter((i) => can(i.permission)).map(renderLink)}
-            </div>
-          </div>
-        )}
+        <div className="mt-6 space-y-1 border-t border-sidebar-border pt-3">
+          {renderLink({
+            href: '/dashboard/guide',
+            label: 'Help & Guide',
+            icon: CircleHelp,
+          })}
+        </div>
       </nav>
 
       <div className="border-t border-sidebar-border p-4">

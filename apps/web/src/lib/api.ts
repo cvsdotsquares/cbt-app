@@ -335,9 +335,9 @@ export const dashboardApi = {
 };
 
 export const examsApi = {
-  list: (token: string, page = 1, search = '') =>
+  list: (token: string, page = 1, search = '', limit = 20) =>
     apiFetch<Paginated<ExamListItem>>(
-      `/exams?page=${page}&limit=20${search ? `&search=${encodeURIComponent(search)}` : ''}`,
+      `/exams?page=${page}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
       authHeaders(token),
     ),
   get: (token: string, id: string) => apiFetch<ExamDetail>(`/exams/${id}`, authHeaders(token)),
@@ -480,6 +480,7 @@ export const usersApi = {
       email?: string;
       status?: string;
       password?: string;
+      roleId?: string | null;
     },
   ) => apiFetch(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body), ...authHeaders(token) }),
   remove: (token: string, id: string) =>
@@ -630,7 +631,7 @@ export const batchesApi = {
     apiFetch(`/batches/${batchId}/teachers`, authHeaders(token)),
   listTeacherAssignmentsByUser: (token: string, userId?: string) =>
     apiFetch(`/batches/teacher-assignments${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`, authHeaders(token)),
-  assignTeacher: (token: string, batchId: string, body: { userId: string; subjectId: string }) =>
+  assignTeacher: (token: string, batchId: string, body: { userId: string; subjectId?: string; subjectIds?: string[] }) =>
     apiFetch(`/batches/${batchId}/teachers`, { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
   removeTeacher: (token: string, batchId: string, assignmentId: string) =>
     apiFetch(`/batches/${batchId}/teachers/${assignmentId}`, { method: 'DELETE', ...authHeaders(token) }),

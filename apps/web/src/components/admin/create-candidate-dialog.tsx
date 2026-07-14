@@ -97,9 +97,13 @@ export function CreateCandidateDialog({ accessToken, batches = [], classes = [] 
           <DialogDescription>Register a new student and optionally assign a class batch.</DialogDescription>
         </DialogHeader>
         <div key={formKey} className="grid gap-4 py-2">
+          {/* Decoy fields — browsers often target the first email/password pair on the page */}
+          <input type="text" name="username" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden="true" />
+          <input type="password" name="password" autoComplete="current-password" className="hidden" tabIndex={-1} aria-hidden="true" />
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div><Label>First name</Label><Input autoComplete="off" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
-            <div><Label>Last name</Label><Input autoComplete="off" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
+            <div><Label>First name</Label><Input name="new-student-first-name" autoComplete="off" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
+            <div><Label>Last name</Label><Input name="new-student-last-name" autoComplete="off" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
           </div>
           <div><Label>Email</Label><Input type="email" name="new-student-email" autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
           <div><Label>Password</Label><PasswordInput name="new-student-password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>

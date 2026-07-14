@@ -87,13 +87,18 @@ export class BatchesController {
 
   @Post(':id/teachers')
   @RequirePermissions(Permission.BATCH_MANAGE)
-  @ApiOperation({ summary: 'Assign a teacher to a subject in a batch' })
+  @ApiOperation({ summary: 'Assign a teacher to one or more subjects in a batch' })
   assignTeacher(
     @Param('id') id: string,
     @CurrentUser('tenantId') tenantId: string,
-    @Body() body: { userId: string; subjectId: string },
+    @Body() body: { userId: string; subjectId?: string; subjectIds?: string[] },
   ) {
-    return this.batchesService.assignTeacher(id, tenantId, body.userId, body.subjectId);
+    const subjectIds = body.subjectIds?.length
+      ? body.subjectIds
+      : body.subjectId
+        ? [body.subjectId]
+        : [];
+    return this.batchesService.assignTeacher(id, tenantId, body.userId, subjectIds);
   }
 
   @Delete(':id/teachers/:assignmentId')

@@ -102,7 +102,13 @@ export function EditCandidateDialog({ accessToken, candidate, open, onOpenChange
           </div>
           <div>
             <Label>Email</Label>
-            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <Input
+              type="email"
+              name="edit-student-email"
+              autoComplete="off"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
           </div>
           <div>
             <Label>Account status</Label>
@@ -119,6 +125,8 @@ export function EditCandidateDialog({ accessToken, candidate, open, onOpenChange
           <div>
             <Label>New password (optional)</Label>
             <PasswordInput
+              name="edit-student-new-password"
+              autoComplete="new-password"
               placeholder="Leave blank to keep current password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}

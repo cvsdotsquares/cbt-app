@@ -21,7 +21,7 @@ const pageTitles: Record<string, string> = {
   '/dashboard/exams': 'Class Tests',
   '/dashboard/candidates': 'Students',
   '/dashboard/results': 'Results',
-  '/dashboard/teacher': 'My Classes',
+  '/dashboard/teacher': 'Home',
   '/dashboard/questions': 'Question Bank',
   '/dashboard/users': 'Staff & Teachers',
   '/dashboard/analytics': 'Analytics',
@@ -30,6 +30,7 @@ const pageTitles: Record<string, string> = {
   '/dashboard/audit': 'Audit Logs',
   '/dashboard/settings': 'Institute Settings',
   '/dashboard/institutes': 'Institutes',
+  '/dashboard/guide': 'Help & Guide',
 };
 
 export function Header() {

@@ -196,7 +196,7 @@ export default function SyllabusPage() {
         }
         badge={teacherPortal ? 'Teacher · Assigned subjects' : 'Classes 9–12'}
       >
-        {can(Permission.MATERIAL_UPLOAD) && (
+        {can(Permission.MATERIAL_UPLOAD) && !teacherPortal && (
           <Button variant="outline" size="sm" asChild>
             <Link href="/dashboard/materials">
               <Upload className="mr-2 h-4 w-4" /> Upload books

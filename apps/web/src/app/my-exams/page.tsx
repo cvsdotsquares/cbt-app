@@ -26,7 +26,7 @@ import { formatRankLabel } from '@/lib/rank';
 import { useNow } from '@/hooks/use-now';
 import {
   LogOut, Play, Clock, Award, FileText, Moon, Sun, Shield, Download, IdCard,
-  Search, CheckCircle2, AlertCircle, BookOpen, Wifi, Monitor, User,
+  Search, CheckCircle2, AlertCircle, BookOpen, Wifi, Monitor, User, CircleHelp,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { TableSkeleton } from '@/components/ui/skeleton';
@@ -192,6 +192,10 @@ export default function MyExamsPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4">
           <Logo />
           <div className="flex items-center gap-1 sm:gap-2">
+            <Button variant="outline" size="sm" className="px-2 sm:px-3" onClick={() => router.push('/help')}>
+              <CircleHelp className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Help</span>
+            </Button>
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>

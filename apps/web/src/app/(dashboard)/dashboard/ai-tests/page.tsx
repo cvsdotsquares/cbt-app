@@ -482,8 +482,14 @@ export default function AiTestsPage() {
                 <li className="flex gap-2">
                   <FileText className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    Upload books on{' '}
-                    <Link href="/dashboard/materials" className="text-primary hover:underline">Books &amp; Notes</Link>
+                    {teacherPortal ? (
+                      'Make sure your admin has uploaded NCERT books for your subject'
+                    ) : (
+                      <>
+                        Upload books on{' '}
+                        <Link href="/dashboard/materials" className="text-primary hover:underline">Books &amp; Notes</Link>
+                      </>
+                    )}
                   </span>
                 </li>
                 <li className="flex gap-2">

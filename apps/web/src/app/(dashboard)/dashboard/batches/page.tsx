@@ -336,6 +336,8 @@ export default function BatchesPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['batch-teachers', selectedBatch] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['teacher-assignments'] });
       setAssignTeacherUserId('');
       setAssignSubjectId('');
       toast({ title: 'Teacher assigned', variant: 'success' });
@@ -455,7 +457,7 @@ export default function BatchesPage() {
                   New batch
                 </Button>
               )}
-              {can(Permission.MATERIAL_READ) && (
+              {can(Permission.MATERIAL_READ) && !teacherPortal && (
                 <Button variant="outline" asChild>
                   <Link href="/dashboard/materials">
                     <Upload className="mr-2 h-4 w-4" /> Upload books
@@ -981,18 +983,24 @@ export default function BatchesPage() {
                       <EmptyState
                         icon={BookOpen}
                         title="No uploaded books for this class yet"
-                        description="Upload NCERT PDFs for this class on NCERT Books. Chapters appear here after indexing."
+                        description={
+                          teacherPortal
+                            ? 'Ask your admin to upload NCERT books for this class. Chapters appear here after indexing.'
+                            : 'Upload NCERT PDFs for this class on NCERT Books. Chapters appear here after indexing.'
+                        }
                       />
-                      <div className="flex justify-center gap-3 pb-8">
-                        <Button asChild>
-                          <Link href="/dashboard/materials">
-                            <Upload className="mr-2 h-4 w-4" /> Upload NCERT books
-                          </Link>
-                        </Button>
-                        <Button variant="outline" asChild>
-                          <Link href="/dashboard/syllabus">View syllabus</Link>
-                        </Button>
-                      </div>
+                      {!teacherPortal && (
+                        <div className="flex justify-center gap-3 pb-8">
+                          <Button asChild>
+                            <Link href="/dashboard/materials">
+                              <Upload className="mr-2 h-4 w-4" /> Upload NCERT books
+                            </Link>
+                          </Button>
+                          <Button variant="outline" asChild>
+                            <Link href="/dashboard/syllabus">View syllabus</Link>
+                          </Button>
+                        </div>
+                      )}
                     </Card>
                   ) : (
                     <>

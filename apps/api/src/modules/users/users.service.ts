@@ -50,7 +50,51 @@ export class UsersService {
       }),
       this.prisma.user.count({ where }),
     ]);
-    return { items, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
+
+    const userIds = items.map((u) => u.id);
+    const assignments = userIds.length
+      ? await this.prisma.teacherAssignment.findMany({
+          where: {
+            userId: { in: userIds },
+            batch: { tenantId },
+          },
+          select: {
+            userId: true,
+            batch: {
+              select: {
+                id: true,
+                name: true,
+                academicYear: true,
+                academicClass: { select: { name: true, level: true } },
+              },
+            },
+          },
+          orderBy: { assignedAt: 'desc' },
+        })
+      : [];
+
+    const batchesByUser = new Map<string, { id: string; label: string }[]>();
+    for (const a of assignments) {
+      const list = batchesByUser.get(a.userId) ?? [];
+      if (!list.some((b) => b.id === a.batch.id)) {
+        list.push({
+          id: a.batch.id,
+          label: `${a.batch.academicClass.name} · ${a.batch.name}`,
+        });
+      }
+      batchesByUser.set(a.userId, list);
+    }
+
+    return {
+      items: items.map((u) => ({
+        ...u,
+        assignedBatches: batchesByUser.get(u.id) ?? [],
+      })),
+      total,
+      page: p,
+      limit: l,
+      totalPages: Math.ceil(total / l),
+    };
   }
 
   async findOne(id: string, tenantId: string) {
@@ -91,7 +135,8 @@ export class UsersService {
     if (existing) throw new ConflictException('Email already registered');
 
     const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
-    const roleIds = data.roleIds ?? [];
+    // Staff accounts get at most one role
+    const roleIds = (data.roleIds ?? []).slice(0, 1);
 
     if (roleIds.length) {
       const roles = await this.prisma.role.findMany({ where: { id: { in: roleIds }, isSystem: true } });
@@ -109,7 +154,7 @@ export class UsersService {
         status: 'ACTIVE',
         emailVerified: true,
         userRoles: roleIds.length
-          ? { create: roleIds.map((roleId) => ({ roleId })) }
+          ? { create: [{ roleId: roleIds[0] }] }
           : undefined,
       },
       select: {
@@ -124,6 +169,7 @@ export class UsersService {
     });
   }
 
+  /** Replace staff roles with a single role (one role per staff user). */
   async assignRole(userId: string, roleId: string, assignedBy: string, tenantId: string) {
     const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId } });
     if (!user) throw new NotFoundException('User not found');
@@ -132,10 +178,7 @@ export class UsersService {
     if (!role) throw new BadRequestException('Invalid role');
     this.assertStaffRoles([role]);
 
-    const existing = await this.prisma.userRole.findFirst({
-      where: { userId, roleId },
-    });
-    if (existing) throw new BadRequestException('Role already assigned');
+    await this.prisma.userRole.deleteMany({ where: { userId } });
 
     return this.prisma.userRole.create({
       data: { userId, roleId, assignedBy },
@@ -162,7 +205,10 @@ export class UsersService {
       email?: string;
       status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
       password?: string;
+      /** Single staff role — replaces any existing roles when provided (empty string clears). */
+      roleId?: string | null;
     },
+    assignedBy?: string,
   ) {
     const user = await this.prisma.user.findFirst({ where: { id, tenantId } });
     if (!user) throw new NotFoundException('User not found');
@@ -188,6 +234,20 @@ export class UsersService {
     if (data.status !== undefined) updateData.status = data.status;
     if (data.password?.trim()) {
       updateData.passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
+    }
+
+    if (data.roleId !== undefined) {
+      if (data.roleId) {
+        const role = await this.prisma.role.findFirst({ where: { id: data.roleId, isSystem: true } });
+        if (!role) throw new BadRequestException('Invalid role');
+        this.assertStaffRoles([role]);
+        await this.prisma.userRole.deleteMany({ where: { userId: id } });
+        await this.prisma.userRole.create({
+          data: { userId: id, roleId: data.roleId, assignedBy: assignedBy ?? null },
+        });
+      } else {
+        await this.prisma.userRole.deleteMany({ where: { userId: id } });
+      }
     }
 
     return this.prisma.user.update({

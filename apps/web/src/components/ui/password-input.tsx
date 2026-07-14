@@ -8,7 +8,7 @@ import { Input, type InputProps } from '@/components/ui/input';
 export interface PasswordInputProps extends Omit<InputProps, 'type'> {}
 
 const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
-  ({ className, ...props }, ref) => {
+  ({ className, autoComplete = 'new-password', ...props }, ref) => {
     const [visible, setVisible] = React.useState(false);
 
     return (
@@ -16,6 +16,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
         <Input
           ref={ref}
           type={visible ? 'text' : 'password'}
+          autoComplete={autoComplete}
           className={cn('pr-10', className)}
           {...props}
         />

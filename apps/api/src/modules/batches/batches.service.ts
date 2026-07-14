@@ -202,25 +202,47 @@ export class BatchesService {
     });
   }
 
-  async assignTeacher(batchId: string, tenantId: string, userId: string, subjectId: string) {
+  async assignTeacher(
+    batchId: string,
+    tenantId: string,
+    userId: string,
+    subjectIdsInput: string | string[],
+  ) {
     const batch = await this.prisma.batch.findFirst({
       where: { id: batchId, tenantId },
       include: { academicClass: { include: { subjects: true } } },
     });
     if (!batch) throw new NotFoundException('Batch not found');
 
-    const subjectOk = batch.academicClass.subjects.some((s) => s.id === subjectId);
-    if (!subjectOk) throw new BadRequestException('Subject does not belong to this batch class');
+    const subjectIds = [...new Set(
+      (Array.isArray(subjectIdsInput) ? subjectIdsInput : [subjectIdsInput])
+        .map((id) => id?.trim())
+        .filter((id): id is string => !!id),
+    )];
+    if (!subjectIds.length) throw new BadRequestException('At least one subject is required');
+
+    const classSubjectIds = new Set(batch.academicClass.subjects.map((s) => s.id));
+    for (const subjectId of subjectIds) {
+      if (!classSubjectIds.has(subjectId)) {
+        throw new BadRequestException('Subject does not belong to this batch class');
+      }
+    }
 
     const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId } });
     if (!user) throw new NotFoundException('Teacher user not found');
 
-    return this.prisma.teacherAssignment.upsert({
-      where: { userId_batchId_subjectId: { userId, batchId, subjectId } },
-      update: {},
-      create: { batchId, userId, subjectId },
-      include: { subject: true },
-    });
+    const assignments = await Promise.all(
+      subjectIds.map((subjectId) =>
+        this.prisma.teacherAssignment.upsert({
+          where: { userId_batchId_subjectId: { userId, batchId, subjectId } },
+          update: {},
+          create: { batchId, userId, subjectId },
+          include: { subject: { select: { id: true, name: true, code: true } } },
+        }),
+      ),
+    );
+
+    return { count: assignments.length, assignments };
   }
 
   async removeTeacher(batchId: string, tenantId: string, assignmentId: string) {

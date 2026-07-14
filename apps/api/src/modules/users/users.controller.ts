@@ -55,19 +55,21 @@ export class UsersController {
 
   @Patch(':id')
   @RequirePermissions(Permission.USER_UPDATE)
-  @ApiOperation({ summary: 'Update user profile or status' })
+  @ApiOperation({ summary: 'Update user profile, status, or single staff role' })
   update(
     @Param('id') id: string,
     @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('sub') assignedBy: string,
     @Body() body: {
       firstName?: string;
       lastName?: string;
       email?: string;
       status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
       password?: string;
+      roleId?: string | null;
     },
   ) {
-    return this.usersService.update(id, tenantId, body);
+    return this.usersService.update(id, tenantId, body, assignedBy);
   }
 
   @Delete(':id')

@@ -194,6 +194,9 @@ export default function CandidatesPage() {
           <div className="relative w-full sm:max-w-sm sm:flex-1">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
+              type="search"
+              name="student-list-search"
+              autoComplete="off"
               placeholder="Search students…"
               className="pl-9"
               value={search}

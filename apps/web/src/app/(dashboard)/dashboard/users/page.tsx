@@ -3,14 +3,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { usersApi } from '@/lib/api';
 import { useRequireAuth } from '@/hooks/use-auth';
-import { useDebounce } from '@/hooks/use-debounce';
 import { toast } from '@/hooks/use-toast';
-import { Search, Users, Pencil, Trash2, School } from 'lucide-react';
+import { Users, Pencil, Trash2, School } from 'lucide-react';
 import { CreateUserDialog } from '@/components/admin/create-user-dialog';
 import { EditUserDialog, type EditableUser } from '@/components/admin/edit-user-dialog';
 import { AssignTeacherClassesDialog } from '@/components/admin/assign-teacher-classes-dialog';
@@ -28,27 +26,29 @@ type UserItem = {
   lastName: string;
   email: string;
   status: string;
-  mfaEnabled: boolean;
   lastLoginAt?: string;
   userRoles: { role: { id: string; name: string } }[];
+  assignedBatches: { id: string; label: string }[];
 };
 
 type UsersPageData = { items: UserItem[]; totalPages: number };
+
+function primaryRole(user: UserItem) {
+  return user.userRoles[0]?.role ?? null;
+}
 
 export default function UsersPage() {
   const { accessToken, user: currentUser } = useRequireAuth(true);
   const { can } = usePermissions();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const debouncedSearch = useDebounce(search);
   const [editUser, setEditUser] = useState<EditableUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserItem | null>(null);
   const [assignTeacher, setAssignTeacher] = useState<UserItem | null>(null);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['users', page, debouncedSearch],
-    queryFn: () => usersApi.list(accessToken!, page, debouncedSearch) as Promise<UsersPageData>,
+    queryKey: ['users', page],
+    queryFn: () => usersApi.list(accessToken!, page) as Promise<UsersPageData>,
     enabled: !!accessToken,
     placeholderData: (prev) => prev,
   });
@@ -60,62 +60,6 @@ export default function UsersPage() {
   });
 
   const roleList = roles || [];
-
-  const removeMutation = useMutation({
-    mutationFn: ({ userId, roleId }: { userId: string; roleId: string }) =>
-      usersApi.removeRole(accessToken!, userId, roleId),
-    onMutate: async ({ userId, roleId }) => {
-      await queryClient.cancelQueries({ queryKey: ['users', page, debouncedSearch] });
-      const previous = queryClient.getQueryData<UsersPageData>(['users', page, debouncedSearch]);
-      queryClient.setQueryData<UsersPageData>(['users', page, debouncedSearch], (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          items: old.items.map((u) =>
-            u.id === userId
-              ? { ...u, userRoles: u.userRoles.filter((ur) => ur.role.id !== roleId) }
-              : u,
-          ),
-        };
-      });
-      return { previous };
-    },
-    onSuccess: () => toast({ title: 'Role removed', variant: 'success' }),
-    onError: (e: Error, _, context) => {
-      if (context?.previous) queryClient.setQueryData(['users', page, debouncedSearch], context.previous);
-      toast({ title: 'Failed', description: e.message, variant: 'destructive' });
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
-  });
-
-  const assignMutation = useMutation({
-    mutationFn: ({ userId, roleId }: { userId: string; roleId: string }) =>
-      usersApi.assignRole(accessToken!, userId, roleId),
-    onMutate: async ({ userId, roleId }) => {
-      const role = roleList.find((r) => r.id === roleId);
-      if (!role) return;
-      await queryClient.cancelQueries({ queryKey: ['users', page, debouncedSearch] });
-      const previous = queryClient.getQueryData<UsersPageData>(['users', page, debouncedSearch]);
-      queryClient.setQueryData<UsersPageData>(['users', page, debouncedSearch], (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          items: old.items.map((u) =>
-            u.id === userId
-              ? { ...u, userRoles: [...u.userRoles, { role }] }
-              : u,
-          ),
-        };
-      });
-      return { previous };
-    },
-    onSuccess: () => toast({ title: 'Role assigned', variant: 'success' }),
-    onError: (e: Error, _, context) => {
-      if (context?.previous) queryClient.setQueryData(['users', page, debouncedSearch], context.previous);
-      toast({ title: 'Failed', description: e.message, variant: 'destructive' });
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
-  });
 
   const deleteMutation = useMutation({
     mutationFn: (userId: string) => usersApi.remove(accessToken!, userId),
@@ -140,88 +84,63 @@ export default function UsersPage() {
         {can(Permission.USER_CREATE) && (
           <CreateUserDialog accessToken={accessToken!} roles={roleList} />
         )}
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search users..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          />
-        </div>
       </PageHeader>
 
       {isLoading ? (
-        <TableSkeleton rows={6} cols={7} />
+        <TableSkeleton rows={6} cols={6} />
       ) : (
         <DataTable>
           <table className="w-full">
             <DataTableHeader>
               <DataTableHead>Name</DataTableHead>
               <DataTableHead>Email</DataTableHead>
-              <DataTableHead>Roles</DataTableHead>
+              <DataTableHead>Role</DataTableHead>
+              <DataTableHead>Batches</DataTableHead>
               <DataTableHead>Status</DataTableHead>
-              <DataTableHead>MFA</DataTableHead>
               <DataTableHead>Last Login</DataTableHead>
-              <DataTableHead>Assign Role</DataTableHead>
               <DataTableHead className="text-right">Actions</DataTableHead>
             </DataTableHeader>
             <tbody>
               {items.map((u) => {
-                const assignedIds = new Set(u.userRoles.map((ur) => ur.role.id));
-                const availableRoles = roleList.filter((r) => !assignedIds.has(r.id));
+                const role = primaryRole(u);
+                const batches = u.assignedBatches ?? [];
                 return (
                   <DataTableRow key={u.id}>
                     <DataTableCell className="font-medium">{u.firstName} {u.lastName}</DataTableCell>
                     <DataTableCell>{u.email}</DataTableCell>
                     <DataTableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {u.userRoles.map((ur) => (
-                          <Badge key={ur.role.id} variant="secondary" className="gap-1 pr-1">
-                            {ur.role.name}
-                            {can(Permission.USER_ASSIGN_ROLE) && (
-                              <button
-                                type="button"
-                                className="ml-1 rounded px-1 hover:bg-muted"
-                                title="Remove role"
-                                onClick={() => removeMutation.mutate({ userId: u.id, roleId: ur.role.id })}
-                              >
-                                ×
-                              </button>
-                            )}
-                          </Badge>
-                        ))}
-                      </div>
-                    </DataTableCell>
-                    <DataTableCell>
-                      <Badge variant={u.status === 'ACTIVE' ? 'success' : 'warning'}>{u.status}</Badge>
-                    </DataTableCell>
-                    <DataTableCell>{u.mfaEnabled ? '✓' : '—'}</DataTableCell>
-                    <DataTableCell className="text-muted-foreground">
-                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}
-                    </DataTableCell>
-                    <DataTableCell>
-                      {can(Permission.USER_ASSIGN_ROLE) ? (
-                        <select
-                          className="h-8 rounded border border-input bg-background px-2 text-xs"
-                          defaultValue=""
-                          onChange={(e) => {
-                            if (e.target.value) assignMutation.mutate({ userId: u.id, roleId: e.target.value });
-                            e.target.value = '';
-                          }}
-                        >
-                          <option value="">+ Role</option>
-                          {availableRoles.map((r) => (
-                            <option key={r.id} value={r.id}>{r.name}</option>
-                          ))}
-                        </select>
+                      {role ? (
+                        <Badge variant="secondary">{role.name}</Badge>
                       ) : (
                         <span className="text-sm text-muted-foreground">—</span>
                       )}
                     </DataTableCell>
+                    <DataTableCell>
+                      {role?.name === 'TEACHER' ? (
+                        batches.length ? (
+                          <div className="flex max-w-[16rem] flex-wrap gap-1">
+                            {batches.map((b) => (
+                              <Badge key={b.id} variant="outline" className="font-normal normal-case tracking-normal">
+                                {b.label}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Not assigned</span>
+                        )
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </DataTableCell>
+                    <DataTableCell>
+                      <Badge variant={u.status === 'ACTIVE' ? 'success' : 'warning'}>{u.status}</Badge>
+                    </DataTableCell>
+                    <DataTableCell className="text-muted-foreground">
+                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}
+                    </DataTableCell>
                     <DataTableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        {can(Permission.BATCH_MANAGE) && u.userRoles.some((ur) => ur.role.name === 'TEACHER') && (
+                        {can(Permission.BATCH_MANAGE) && role?.name === 'TEACHER' && (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -242,6 +161,7 @@ export default function UsersPage() {
                               lastName: u.lastName,
                               email: u.email,
                               status: u.status,
+                              roleId: role?.id ?? '',
                             })}
                           >
                             <Pencil className="h-4 w-4" />
@@ -270,7 +190,7 @@ export default function UsersPage() {
             <EmptyState
               icon={Users}
               title="No users found"
-              description={debouncedSearch ? 'Try a different search term.' : 'Create your first user to get started.'}
+              description="Create your first user to get started."
             />
           )}
         </DataTable>
@@ -291,6 +211,8 @@ export default function UsersPage() {
       <EditUserDialog
         accessToken={accessToken!}
         user={editUser}
+        roles={roleList}
+        canAssignRole={can(Permission.USER_ASSIGN_ROLE) || can(Permission.USER_UPDATE)}
         open={!!editUser}
         onOpenChange={(open) => { if (!open) setEditUser(null); }}
       />
