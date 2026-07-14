@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -84,6 +84,7 @@ export default function MyExamsPage() {
   const [loadingAdmit, setLoadingAdmit] = useState<string | null>(null);
   const [certificate, setCertificate] = useState<CertificateData | null>(null);
   const [loadingCertificate, setLoadingCertificate] = useState(false);
+  const certificateRequestId = useRef(0);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<Tab>('exams');
   const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
@@ -154,20 +155,31 @@ export default function MyExamsPage() {
 
   async function openCertificate(resultId: string) {
     if (!accessToken) return;
+    const requestId = ++certificateRequestId.current;
     setLoadingCertificate(true);
     setCertificate(null);
     try {
       const cert = await resultsApi.certificate(accessToken, resultId) as CertificateData;
+      if (certificateRequestId.current !== requestId) return;
       setCertificate(cert);
     } catch (e) {
+      if (certificateRequestId.current !== requestId) return;
       toast({
         title: 'Certificate unavailable',
         description: e instanceof Error ? e.message : 'Results must be published before downloading a certificate.',
         variant: 'destructive',
       });
     } finally {
-      setLoadingCertificate(false);
+      if (certificateRequestId.current === requestId) {
+        setLoadingCertificate(false);
+      }
     }
+  }
+
+  function closeCertificate() {
+    certificateRequestId.current += 1;
+    setCertificate(null);
+    setLoadingCertificate(false);
   }
   if (!ready) return null;
   if (user && isAdmin(normalizeRoles(user.roles))) return null;
@@ -571,7 +583,7 @@ export default function MyExamsPage() {
       <CertificateDialog
         certificate={certificate}
         loading={loadingCertificate && !certificate}
-        onClose={() => setCertificate(null)}
+        onClose={closeCertificate}
       />
     </div>
   );

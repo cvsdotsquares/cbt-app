@@ -103,10 +103,10 @@ export default function LoginPage() {
     await loginWithCredentials(readCredentials(e.currentTarget));
   }
 
-  async function fillDemo(role: 'admin' | 'candidate') {
+  async function fillDemo(role: 'teacher' | 'candidate') {
     const credentials =
-      role === 'admin'
-        ? { email: 'admin@cbt-platform.com', password: 'Admin@123' }
+      role === 'teacher'
+        ? { email: 'teacher@example.com', password: 'Teacher@123' }
         : { email: 'candidate@example.com', password: 'Candidate@123' };
     await loginWithCredentials(credentials);
   }
@@ -218,7 +218,7 @@ export default function LoginPage() {
           <div className="rounded-xl border border-border/60 bg-card/50 p-5 backdrop-blur-sm">
             <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Demo Credentials</p>
             <div className="grid gap-2 sm:grid-cols-2">
-              <Button type="button" variant="outline" disabled={loading} onClick={() => fillDemo('admin')}>
+              <Button type="button" variant="outline" disabled={loading} onClick={() => fillDemo('teacher')}>
                 Sign in as Teacher
               </Button>
               <Button type="button" variant="outline" disabled={loading} onClick={() => fillDemo('candidate')}>
@@ -226,7 +226,9 @@ export default function LoginPage() {
               </Button>
             </div>
             <p className="pt-3 text-center text-xs text-muted-foreground">
-              Teacher: <span className="font-semibold text-foreground">Admin@123</span>
+              Teacher: <span className="font-semibold text-foreground">teacher@example.com</span>
+              {' / '}
+              <span className="font-semibold text-foreground">Teacher@123</span>
               {' · '}
               Student: <span className="font-semibold text-foreground">Candidate@123</span>
             </p>

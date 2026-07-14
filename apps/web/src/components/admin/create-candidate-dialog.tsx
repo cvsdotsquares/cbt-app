@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
@@ -101,7 +102,7 @@ export function CreateCandidateDialog({ accessToken, batches = [], classes = [] 
             <div><Label>Last name</Label><Input autoComplete="off" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
           </div>
           <div><Label>Email</Label><Input type="email" name="new-student-email" autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-          <div><Label>Password</Label><Input type="password" name="new-student-password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
+          <div><Label>Password</Label><PasswordInput name="new-student-password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
           <div><Label>Registration no. (optional)</Label><Input autoComplete="off" value={form.registrationNumber} onChange={(e) => setForm({ ...form, registrationNumber: e.target.value })} placeholder="Auto-generated if empty" /></div>
 
           <div className="rounded-lg border bg-muted/30 p-3 space-y-3">

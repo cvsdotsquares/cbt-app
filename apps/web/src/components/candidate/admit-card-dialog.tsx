@@ -35,15 +35,18 @@ export function AdmitCardDialog({ card, onClose }: AdmitCardDialogProps) {
 
   return (
     <Dialog open={!!card} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+      <DialogContent
+        className="max-w-lg gap-0 overflow-visible p-0 print:max-w-none print:border-0 print:shadow-none"
+        closeClassName="print:hidden -right-2.5 -top-2.5 h-9 w-9 rounded-full border border-border bg-background text-foreground shadow-md opacity-100 hover:bg-muted hover:text-foreground focus:ring-ring"
+      >
         <DialogHeader className="sr-only">
           <DialogTitle>Admit Card</DialogTitle>
           <DialogDescription>{card?.examTitle}</DialogDescription>
         </DialogHeader>
         {card && (
-          <div id="admit-card-print" className="space-y-0">
+          <div id="admit-card-print" className="overflow-hidden rounded-[inherit]">
             <div className="gradient-primary px-6 py-5 text-white">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <Logo variant="light" />
                 <span className="rounded-md bg-white/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest">
                   Admit Card

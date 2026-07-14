@@ -25,24 +25,30 @@ export function CertificateDialog({ certificate, loading, onClose }: Certificate
     : '';
 
   return (
-    <Dialog open={!!certificate || loading} onOpenChange={(open) => { if (!open && !loading) onClose(); }}>
-      <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
+    <Dialog open={!!certificate || !!loading} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        className="max-w-2xl gap-0 overflow-visible p-0"
+        closeClassName="print:hidden -right-2.5 -top-2.5 h-9 w-9 rounded-full border border-border bg-background text-foreground shadow-md opacity-100 hover:bg-muted hover:text-foreground focus:ring-ring"
+      >
         <DialogHeader className="sr-only">
           <DialogTitle>Exam Certificate</DialogTitle>
-          <DialogDescription>{certificate?.examTitle}</DialogDescription>
+          <DialogDescription>{certificate?.examTitle ?? 'Generating certificate'}</DialogDescription>
         </DialogHeader>
 
         {loading && (
-          <div className="flex flex-col items-center justify-center gap-3 py-20 text-muted-foreground">
+          <div className="flex flex-col items-center justify-center gap-3 rounded-[inherit] px-6 py-20 text-muted-foreground">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <p className="text-sm font-medium">Generating certificate…</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={onClose}>
+              Cancel
+            </Button>
           </div>
         )}
 
         {certificate && !loading && (
-          <div id="certificate-preview">
+          <div id="certificate-preview" className="overflow-hidden rounded-[inherit]">
             <div className="gradient-primary px-6 py-5 text-white">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <Logo variant="light" />
                 <span className="rounded-md bg-white/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest">
                   Certificate

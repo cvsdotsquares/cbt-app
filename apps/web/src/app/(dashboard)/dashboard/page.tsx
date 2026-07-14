@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Upload, Users, Sparkles, ArrowRight, CheckCircle2, BookOpen,
   GraduationCap, ClipboardList, Award, Calendar, TrendingUp,
-  ExternalLink, Circle, ChevronRight, School, FileText,
+  ExternalLink, Circle, ChevronRight, School, FileText, ShieldAlert, Eye,
 } from 'lucide-react';
 import { dashboardApi, onboardingApi } from '@/lib/api';
 import { useRequireAuth } from '@/hooks/use-auth';
@@ -65,7 +65,25 @@ type DashboardData = {
     percentage: number;
     submittedAt: string;
   }[];
+  recentViolations?: {
+    id: string;
+    eventType: string;
+    label: string;
+    severity: string;
+    candidateName: string;
+    examTitle: string;
+    occurredAt: string;
+    message: string;
+  }[];
 };
+
+function severityTone(severity: string) {
+  const s = severity?.toUpperCase();
+  if (s === 'CRITICAL') return 'bg-red-500/15 text-red-700 dark:text-red-400';
+  if (s === 'HIGH') return 'bg-orange-500/15 text-orange-700 dark:text-orange-400';
+  if (s === 'MEDIUM') return 'bg-amber-500/15 text-amber-700 dark:text-amber-400';
+  return 'bg-muted text-muted-foreground';
+}
 
 const workflowSteps = [
   {
@@ -324,6 +342,21 @@ export default function DashboardPage() {
         {can(Permission.EXAM_READ) && (
           <StatCard title="Published Tests" value={stats?.publishedExams ?? 0} icon={ClipboardList} accent="violet" />
         )}
+        {can(Permission.PROCTORING_MONITOR) && (
+          <StatCard
+            title="Violation Alerts"
+            value={stats?.violationAlerts ?? 0}
+            icon={ShieldAlert}
+            accent={(stats?.violationAlerts ?? 0) > 0 ? 'red' : 'amber'}
+            trend={
+              (stats?.activeSessions ?? 0) > 0
+                ? `${stats!.activeSessions} live session(s)`
+                : (stats?.violationAlerts ?? 0) > 0
+                  ? 'Needs review'
+                  : 'All clear'
+            }
+          />
+        )}
         {can(Permission.MATERIAL_READ) && (() => {
           const materialsDetail = setup?.steps.find((s) => s.id === 'materials')?.detail;
           const indexed = parseLeadingCount(materialsDetail);
@@ -339,7 +372,7 @@ export default function DashboardPage() {
             />
           );
         })()}
-        {can(Permission.RESULT_READ) && (
+        {!can(Permission.PROCTORING_MONITOR) && can(Permission.RESULT_READ) && (
           <StatCard
             title="AI Questions"
             value={stats?.totalQuestions ?? 0}
@@ -384,89 +417,190 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Teaching workflow */}
-        {visibleWorkflow.length > 0 && (
-          <section className="lg:col-span-3">
-            <div className="mb-4">
-              <h2 className="text-base font-semibold">How it works</h2>
-              <p className="text-sm text-muted-foreground">
-                Three steps from books to live tests for your students
-              </p>
-            </div>
-            <div className="space-y-3">
-              {visibleWorkflow.map((step, idx) => {
-                const Icon = step.icon;
-                const progress = stepProgress(step.keys, doneMap);
-                const isLast = idx === visibleWorkflow.length - 1;
+        {/* Teaching workflow + recent submissions */}
+        {(visibleWorkflow.length > 0 ||
+          (can(Permission.RESULT_READ) && (data?.recentSubmissions?.length ?? 0) > 0)) && (
+          <div className="space-y-6 lg:col-span-3">
+            {visibleWorkflow.length > 0 && (
+              <section>
+                <div className="mb-4">
+                  <h2 className="text-base font-semibold">How it works</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Three steps from books to live tests for your students
+                  </p>
+                </div>
+                <div className="space-y-0">
+                  {visibleWorkflow.map((step, idx) => {
+                    const Icon = step.icon;
+                    const progress = stepProgress(step.keys, doneMap);
+                    const isLast = idx === visibleWorkflow.length - 1;
 
-                return (
-                  <div key={step.num} className="relative">
-                    {!isLast && (
-                      <div className="absolute left-[27px] top-[60px] hidden h-[calc(100%-12px)] w-px bg-border md:block" />
-                    )}
-                    <Card className={cn(
-                      'surface-card overflow-hidden transition-colors',
-                      progress.complete && 'border-emerald-500/30',
-                    )}>
-                      <CardContent className="flex gap-4 p-5">
-                        <div className={cn(
-                          'relative z-10 flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl',
-                          progress.complete
-                            ? 'bg-emerald-500/10 text-emerald-600'
-                            : 'bg-primary/10 text-primary',
-                        )}>
-                          {progress.complete ? (
-                            <CheckCircle2 className="h-6 w-6" />
-                          ) : (
-                            <>
-                              <Icon className="h-5 w-5" />
-                              <span className="mt-0.5 text-[10px] font-bold">Step {step.num}</span>
-                            </>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <h3 className="font-semibold">{step.title}</h3>
-                              <p className="mt-0.5 text-sm text-muted-foreground">{step.desc}</p>
-                            </div>
-                            {!progress.complete && progress.done > 0 && (
-                              <Badge variant="warning" className="normal-case tracking-normal">
-                                {progress.done}/{progress.total} done
-                              </Badge>
+                    return (
+                      <div key={step.num} className="relative flex gap-4">
+                        <div className="flex w-14 shrink-0 flex-col items-center">
+                          <div className={cn(
+                            'relative z-10 flex h-14 w-14 flex-col items-center justify-center rounded-2xl border bg-background',
+                            progress.complete
+                              ? 'border-emerald-500/30 text-emerald-600'
+                              : 'border-primary/20 text-primary',
+                            progress.complete ? 'bg-emerald-500/10' : 'bg-primary/10',
+                          )}>
+                            {progress.complete ? (
+                              <CheckCircle2 className="h-6 w-6" />
+                            ) : (
+                              <>
+                                <Icon className="h-5 w-5" />
+                                <span className="mt-0.5 text-[10px] font-bold">Step {step.num}</span>
+                              </>
                             )}
                           </div>
-                          {!progress.complete && (
-                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className="h-full rounded-full bg-primary/70 transition-all"
-                                style={{ width: `${(progress.done / progress.total) * 100}%` }}
-                              />
-                            </div>
+                          {!isLast && (
+                            <div className="my-1 w-px flex-1 min-h-[12px] bg-border" aria-hidden />
                           )}
-                          <Button
-                            variant={progress.complete ? 'outline' : 'default'}
-                            size="sm"
-                            className="mt-4"
-                            asChild
-                          >
-                            <Link href={step.href}>
-                              {progress.complete ? 'Open' : 'Get started'}
-                              <ArrowRight className="ml-2 h-4 w-4" />
-                            </Link>
-                          </Button>
                         </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+                        <Card className={cn(
+                          'mb-3 flex-1 surface-card overflow-hidden transition-colors',
+                          isLast && 'mb-0',
+                          progress.complete && 'border-emerald-500/30',
+                        )}>
+                          <CardContent className="p-5">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <h3 className="font-semibold">{step.title}</h3>
+                                  <p className="mt-0.5 text-sm text-muted-foreground">{step.desc}</p>
+                                </div>
+                                {!progress.complete && progress.done > 0 && (
+                                  <Badge variant="warning" className="normal-case tracking-normal">
+                                    {progress.done}/{progress.total} done
+                                  </Badge>
+                                )}
+                              </div>
+                              {!progress.complete && (
+                                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+                                  <div
+                                    className="h-full rounded-full bg-primary/70 transition-all"
+                                    style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                                  />
+                                </div>
+                              )}
+                              <Button
+                                variant={progress.complete ? 'outline' : 'default'}
+                                size="sm"
+                                className="mt-4"
+                                asChild
+                              >
+                                <Link href={step.href}>
+                                  {progress.complete ? 'Open' : 'Get started'}
+                                  <ArrowRight className="ml-2 h-4 w-4" />
+                                </Link>
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {can(Permission.RESULT_READ) && (data?.recentSubmissions?.length ?? 0) > 0 && (
+              <section>
+                <Card className="surface-card">
+                  <CardHeader className="border-b border-border/60 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-base font-bold">
+                      <TrendingUp className="h-4 w-4 text-emerald-600" />
+                      Recent submissions
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="divide-y divide-border/60 p-0">
+                    {data!.recentSubmissions!.slice(0, 5).map((sub) => (
+                      <div key={sub.id} className="flex items-center gap-3 px-5 py-3.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-bold text-emerald-700">
+                          {Math.round(sub.percentage)}%
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{sub.candidateName}</p>
+                          <p className="truncate text-xs text-muted-foreground">{sub.examTitle}</p>
+                        </div>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {timeAgo(sub.submittedAt)}
+                        </span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </section>
+            )}
+          </div>
         )}
 
         {/* Activity sidebar */}
         <aside className="space-y-6 lg:col-span-2">
+          {can(Permission.PROCTORING_MONITOR) && (
+            <Card className={cn(
+              'surface-card overflow-hidden',
+              (stats?.violationAlerts ?? 0) > 0 && 'border-red-500/25',
+            )}>
+              <CardHeader className="border-b border-border/60 pb-4">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="flex items-center gap-2 text-base font-bold">
+                    <ShieldAlert className={cn(
+                      'h-4 w-4',
+                      (stats?.violationAlerts ?? 0) > 0 ? 'text-red-600' : 'text-muted-foreground',
+                    )} />
+                    Integrity alerts
+                  </CardTitle>
+                  {(stats?.violationAlerts ?? 0) > 0 && (
+                    <Badge variant="destructive" className="normal-case tracking-normal">
+                      {stats!.violationAlerts} high/critical
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {(data?.recentViolations?.length ?? 0) > 0 ? (
+                  <div className="divide-y divide-border/60">
+                    {data!.recentViolations!.slice(0, 5).map((v) => (
+                      <div key={v.id} className="flex items-start gap-3 px-5 py-3.5">
+                        <div className={cn(
+                          'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase',
+                          severityTone(v.severity),
+                        )}>
+                          {v.severity?.[0] ?? '!'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{v.candidateName}</p>
+                          <p className="truncate text-xs text-muted-foreground">{v.label}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">{v.examTitle}</p>
+                        </div>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {timeAgo(v.occurredAt)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-5 py-6 text-center">
+                    <p className="text-sm font-medium">No recent rule violations</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Cheating signals and proctoring flags will appear here.
+                    </p>
+                  </div>
+                )}
+                <div className="border-t border-border/60 px-5 py-3">
+                  <Button variant="outline" size="sm" className="w-full" asChild>
+                    <Link href="/dashboard/monitoring">
+                      <Eye className="mr-2 h-3.5 w-3.5" />
+                      Open live monitoring
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {can(Permission.EXAM_READ) && (data?.upcomingExams?.length ?? 0) > 0 && (
             <Card className="surface-card">
               <CardHeader className="border-b border-border/60 pb-4">
@@ -497,33 +631,6 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </Link>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {can(Permission.RESULT_READ) && (data?.recentSubmissions?.length ?? 0) > 0 && (
-            <Card className="surface-card">
-              <CardHeader className="border-b border-border/60 pb-4">
-                <CardTitle className="flex items-center gap-2 text-base font-bold">
-                  <TrendingUp className="h-4 w-4 text-emerald-600" />
-                  Recent submissions
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="divide-y divide-border/60 p-0">
-                {data!.recentSubmissions!.slice(0, 5).map((sub) => (
-                  <div key={sub.id} className="flex items-center gap-3 px-5 py-3.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-bold text-emerald-700">
-                      {Math.round(sub.percentage)}%
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{sub.candidateName}</p>
-                      <p className="truncate text-xs text-muted-foreground">{sub.examTitle}</p>
-                    </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {timeAgo(sub.submittedAt)}
-                    </span>
-                  </div>
                 ))}
               </CardContent>
             </Card>

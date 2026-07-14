@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -117,8 +118,7 @@ export function EditCandidateDialog({ accessToken, candidate, open, onOpenChange
           </div>
           <div>
             <Label>New password (optional)</Label>
-            <Input
-              type="password"
+            <PasswordInput
               placeholder="Leave blank to keep current password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
