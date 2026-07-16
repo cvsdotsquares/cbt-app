@@ -14,6 +14,15 @@ export function isFullscreenActive(): boolean {
   return !!getFullscreenElement();
 }
 
+function setExamFullscreenClass(active: boolean) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.classList.toggle('exam-fullscreen-active', active);
+}
+
+export function syncExamFullscreenClass(): void {
+  setExamFullscreenClass(isFullscreenActive());
+}
+
 export function normalizeSecurityPolicy(
   raw?: RawSecurityPolicy | null,
 ): ExamSecurityPolicy {
@@ -50,25 +59,71 @@ export function normalizeSecurityPolicy(
 }
 
 export async function requestDocumentFullscreen(): Promise<boolean> {
-  if (isFullscreenActive()) return true;
+  if (isFullscreenActive()) {
+    setExamFullscreenClass(true);
+    return true;
+  }
 
   const el = document.documentElement as HTMLElement & {
-    webkitRequestFullscreen?: () => Promise<void> | void;
+    webkitRequestFullscreen?: (options?: FullscreenOptions) => Promise<void> | void;
     msRequestFullscreen?: () => Promise<void> | void;
   };
 
-  const request = el.requestFullscreen?.bind(el)
-    ?? el.webkitRequestFullscreen?.bind(el)
-    ?? el.msRequestFullscreen?.bind(el);
+  const options: FullscreenOptions = { navigationUI: 'hide' };
 
-  if (!request) return false;
+  const tryRequest = async (request: (opts?: FullscreenOptions) => Promise<void> | void, withOptions: boolean) => {
+    if (withOptions) {
+      await request(options);
+    } else {
+      await request();
+    }
+  };
 
-  try {
-    await request();
-    return isFullscreenActive();
-  } catch {
-    return false;
+  setExamFullscreenClass(true);
+
+  if (el.requestFullscreen) {
+    try {
+      await tryRequest(el.requestFullscreen.bind(el), true);
+      if (isFullscreenActive()) return true;
+    } catch {
+      /* fall through */
+    }
+    try {
+      await tryRequest(el.requestFullscreen.bind(el), false);
+      if (isFullscreenActive()) return true;
+    } catch {
+      setExamFullscreenClass(false);
+      return false;
+    }
   }
+
+  if (el.webkitRequestFullscreen) {
+    try {
+      await el.webkitRequestFullscreen(options);
+      if (isFullscreenActive()) return true;
+    } catch {
+      try {
+        await el.webkitRequestFullscreen();
+        if (isFullscreenActive()) return true;
+      } catch {
+        setExamFullscreenClass(false);
+        return false;
+      }
+    }
+  }
+
+  if (el.msRequestFullscreen) {
+    try {
+      await el.msRequestFullscreen();
+      if (isFullscreenActive()) return true;
+    } catch {
+      setExamFullscreenClass(false);
+      return false;
+    }
+  }
+
+  setExamFullscreenClass(false);
+  return false;
 }
 
 export async function exitDocumentFullscreen(): Promise<void> {
@@ -81,11 +136,16 @@ export async function exitDocumentFullscreen(): Promise<void> {
     ?? doc.webkitExitFullscreen?.bind(document)
     ?? doc.msExitFullscreen?.bind(document);
 
-  if (!exit || !isFullscreenActive()) return;
+  if (!exit || !isFullscreenActive()) {
+    setExamFullscreenClass(false);
+    return;
+  }
 
   try {
     await exit();
   } catch {
     /* ignore */
+  } finally {
+    setExamFullscreenClass(false);
   }
 }

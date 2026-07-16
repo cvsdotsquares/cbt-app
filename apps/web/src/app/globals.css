@@ -162,4 +162,48 @@
   .nav-active-glow {
     box-shadow: 0 0 20px -4px hsl(239 84% 67% / 0.5);
   }
+
+  /* Exam fullscreen — fill viewport; pairs with requestFullscreen({ navigationUI: 'hide' }) */
+  html.exam-fullscreen-active,
+  html:fullscreen,
+  html:-webkit-full-screen {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  html.exam-fullscreen-active body,
+  html:fullscreen body,
+  html:-webkit-full-screen body {
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .exam-shell-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-color: hsl(var(--background));
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html:fullscreen .exam-shell-fullscreen,
+  html:-webkit-full-screen .exam-shell-fullscreen,
+  html.exam-fullscreen-active .exam-shell-fullscreen {
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+  }
 }

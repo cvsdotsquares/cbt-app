@@ -41,6 +41,9 @@ export class ResultsService {
     });
     if (!session) throw new NotFoundException('Session not found');
 
+    const examSettings = (session.exam.settings || {}) as Record<string, unknown>;
+    const negativeMarkingEnabled = examSettings.negativeMarking === true;
+
     let totalScore = 0;
     let maxScore = 0;
 
@@ -72,7 +75,7 @@ export class ResultsService {
         version.correctAnswer,
         response.answer,
         version.marks,
-        version.negativeMarks || 0,
+        negativeMarkingEnabled ? (version.negativeMarks || 0) : 0,
       );
       totalScore += Math.max(marks, 0);
 

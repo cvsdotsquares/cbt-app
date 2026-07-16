@@ -73,7 +73,7 @@ export default function QuestionsPage() {
         ? { value: form.correctAnswers }
         : { value: form.correctAnswer },
       marks: 2,
-      negativeMarks: 0.5,
+      negativeMarks: 0,
     });
     },
     onSuccess: () => {

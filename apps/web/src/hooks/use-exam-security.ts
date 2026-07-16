@@ -7,6 +7,7 @@ import {
   isFullscreenActive,
   normalizeSecurityPolicy,
   requestDocumentFullscreen,
+  syncExamFullscreenClass,
 } from '@/lib/exam-security-policy';
 
 interface UseExamSecurityOptions {
@@ -55,8 +56,10 @@ export function useExamSecurity({
       return true;
     }
     const ok = await requestDocumentFullscreen();
-    setIsFullscreen(ok || isFullscreenActive());
-    return ok || isFullscreenActive();
+    const active = ok || isFullscreenActive();
+    setIsFullscreen(active);
+    syncExamFullscreenClass();
+    return active;
   }, [fullscreenRequired]);
 
   useEffect(() => {
@@ -65,6 +68,7 @@ export function useExamSecurity({
       setIsFullscreen(true);
       return;
     }
+    syncExamFullscreenClass();
     setIsFullscreen(isFullscreenActive());
   }, [enabled, fullscreenRequired]);
 
@@ -102,6 +106,7 @@ export function useExamSecurity({
 
     const onFullscreenChange = () => {
       const fs = isFullscreenActive();
+      syncExamFullscreenClass();
       setIsFullscreen(fullscreenRequired ? fs : true);
       if (!fs && fullscreenRequired) {
         report('FULLSCREEN_EXIT', 'HIGH');
@@ -136,6 +141,9 @@ export function useExamSecurity({
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
       document.removeEventListener('keydown', onKeyDown);
+      if (!isFullscreenActive()) {
+        syncExamFullscreenClass();
+      }
     };
   }, [enabled, normalizedPolicy, fullscreenRequired, report]);
 

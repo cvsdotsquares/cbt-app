@@ -74,7 +74,7 @@ export default function AiStudioPage() {
           options: q.options,
           correctAnswer: q.correctAnswer,
           marks: q.marks || 2,
-          negativeMarks: q.negativeMarks || 0.5,
+          negativeMarks: q.negativeMarks || 0,
         });
       }
     },

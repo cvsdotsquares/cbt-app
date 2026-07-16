@@ -84,7 +84,7 @@ For MCQ, exactly one option is correct. For MSQ, two or more options may be corr
 Do not include explanations. Avoid trick questions or ambiguous wording.`;
 
     const userPrompt = `Generate exactly ${params.count} ${params.difficulty} difficulty ${params.type} exam questions about "${params.topic}".
-Return JSON matching the schema. Use marks: 2 and negativeMarks: 0.5 for each question.`;
+Return JSON matching the schema. Use marks: 2 and negativeMarks: 0 for each question.`;
 
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -209,7 +209,7 @@ Return JSON matching the schema. Use marks: 2 and negativeMarks: 0.5 for each qu
         options: finalOptions,
         correctAnswer: { value: finalCorrect as string | string[] },
         marks: q.marks ?? 2,
-        negativeMarks: q.negativeMarks ?? 0.5,
+        negativeMarks: q.negativeMarks ?? 0,
       };
     });
   }
@@ -237,13 +237,13 @@ Return JSON matching the schema. Use marks: 2 and negativeMarks: 0.5 for each qu
   private generateFromTemplate(params: { topic: string; count: number; difficulty: string; type: string }): GeneratedQuestion[] {
     const templates: Record<string, GeneratedQuestion[]> = {
       'General Aptitude': [
-        { title: 'Percentage Calc', type: 'MCQ', difficulty: 'MEDIUM', content: { text: 'What is 25% of 240?' }, options: { a: '50', b: '60', c: '70', d: '80' }, correctAnswer: { value: 'b' }, marks: 2, negativeMarks: 0.5 },
-        { title: 'Time & Work', type: 'MCQ', difficulty: 'MEDIUM', content: { text: 'A can finish work in 10 days. B in 15 days. Together they finish in?' }, options: { a: '5 days', b: '6 days', c: '7 days', d: '8 days' }, correctAnswer: { value: 'b' }, marks: 2, negativeMarks: 0.5 },
-        { title: 'Logical Reasoning', type: 'MCQ', difficulty: 'EASY', content: { text: 'If all Bloops are Razzies and all Razzies are Lazzies, are all Bloops definitely Lazzies?' }, options: { a: 'Yes', b: 'No', c: 'Cannot determine', d: 'Sometimes' }, correctAnswer: { value: 'a' }, marks: 2, negativeMarks: 0.5 },
+        { title: 'Percentage Calc', type: 'MCQ', difficulty: 'MEDIUM', content: { text: 'What is 25% of 240?' }, options: { a: '50', b: '60', c: '70', d: '80' }, correctAnswer: { value: 'b' }, marks: 2, negativeMarks: 0 },
+        { title: 'Time & Work', type: 'MCQ', difficulty: 'MEDIUM', content: { text: 'A can finish work in 10 days. B in 15 days. Together they finish in?' }, options: { a: '5 days', b: '6 days', c: '7 days', d: '8 days' }, correctAnswer: { value: 'b' }, marks: 2, negativeMarks: 0 },
+        { title: 'Logical Reasoning', type: 'MCQ', difficulty: 'EASY', content: { text: 'If all Bloops are Razzies and all Razzies are Lazzies, are all Bloops definitely Lazzies?' }, options: { a: 'Yes', b: 'No', c: 'Cannot determine', d: 'Sometimes' }, correctAnswer: { value: 'a' }, marks: 2, negativeMarks: 0 },
       ],
       JavaScript: [
-        { title: 'JS Closures', type: 'MCQ', difficulty: 'HARD', content: { text: 'What is a closure in JavaScript?' }, options: { a: 'Function + lexical env', b: 'Class instance', c: 'Promise handler', d: 'Event loop' }, correctAnswer: { value: 'a' }, marks: 2, negativeMarks: 0.5 },
-        { title: 'JS Types', type: 'MCQ', difficulty: 'EASY', content: { text: 'typeof null in JavaScript returns?' }, options: { a: 'null', b: 'undefined', c: 'object', d: 'number' }, correctAnswer: { value: 'c' }, marks: 2, negativeMarks: 0.5 },
+        { title: 'JS Closures', type: 'MCQ', difficulty: 'HARD', content: { text: 'What is a closure in JavaScript?' }, options: { a: 'Function + lexical env', b: 'Class instance', c: 'Promise handler', d: 'Event loop' }, correctAnswer: { value: 'a' }, marks: 2, negativeMarks: 0 },
+        { title: 'JS Types', type: 'MCQ', difficulty: 'EASY', content: { text: 'typeof null in JavaScript returns?' }, options: { a: 'null', b: 'undefined', c: 'object', d: 'number' }, correctAnswer: { value: 'c' }, marks: 2, negativeMarks: 0 },
       ],
     };
 

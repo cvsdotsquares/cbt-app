@@ -125,14 +125,34 @@ export default function AiTestsPage() {
   }, [mode, classSubjects.length, form.questionsPerSubject, form.questionCount]);
 
   const createMutation = useMutation({
-    mutationFn: () => aiApi.createAiTest(accessToken!, {
-      ...form,
-      allSubjects: teacherPortal ? false : mode === 'all',
-      subjectId: teacherPortal || mode === 'single' ? form.subjectId : undefined,
-      durationMinutes: mode === 'all' && !teacherPortal
-        ? form.durationMinutes
-        : Math.min(form.durationMinutes, 60),
-    }),
+    mutationFn: () => {
+      const base = {
+        title: form.title,
+        batchId: form.batchId,
+        difficulty: form.difficulty,
+        syllabusScope: form.syllabusScope,
+        assignToBatch: form.assignToBatch,
+        questionTypes: form.questionTypes,
+        allSubjects: teacherPortal ? false : mode === 'all',
+        durationMinutes: mode === 'all' && !teacherPortal
+          ? form.durationMinutes
+          : Math.min(form.durationMinutes, 60),
+      };
+
+      if (mode === 'all' && !teacherPortal) {
+        return aiApi.createAiTest(accessToken!, {
+          ...base,
+          questionsPerSubject: form.questionsPerSubject,
+          questionCount: classSubjects.length * form.questionsPerSubject,
+        });
+      }
+
+      return aiApi.createAiTest(accessToken!, {
+        ...base,
+        subjectId: form.subjectId,
+        questionCount: form.questionCount,
+      });
+    },
     onSuccess: (data) => {
       const d = data as {
         exam?: { id: string; title: string };
@@ -291,6 +311,12 @@ export default function AiTestsPage() {
                         value={form.questionsPerSubject}
                         onChange={(e) => setForm({ ...form, questionsPerSubject: parseInt(e.target.value) || 5 })}
                       />
+                      {classSubjects.length > 0 && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {form.questionsPerSubject} per subject × {classSubjects.length} subjects ={' '}
+                          {form.questionsPerSubject * classSubjects.length} total questions
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div>

@@ -115,7 +115,7 @@ export function AiTestQuestionsReview({
           optionD: options.d ?? options.D ?? '',
           correctAnswer: resolveCorrectAnswerKey(version?.correctAnswer),
           marks: version?.marks ?? 2,
-          negativeMarks: version?.negativeMarks ?? 0.5,
+          negativeMarks: version?.negativeMarks ?? 0,
         });
       }
     }

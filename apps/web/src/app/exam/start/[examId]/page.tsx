@@ -228,7 +228,7 @@ export default function ExamStartPage() {
 
   if (fullscreenRequired && !isFullscreen) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="exam-shell-fullscreen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
           <CardContent className="space-y-5 p-8 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
@@ -237,7 +237,7 @@ export default function ExamStartPage() {
             <div className="space-y-2">
               <h2 className="text-xl font-bold">Fullscreen Required</h2>
               <p className="text-sm text-muted-foreground">
-                Your browser requires a click to enter fullscreen. Press the button below to continue your exam.
+                Click below to enter secure fullscreen mode. Your browser will hide tabs and the address bar during the test.
               </p>
             </div>
             {fullscreenError && (
@@ -284,7 +284,7 @@ export default function ExamStartPage() {
   const answeredCount = Object.keys(answers).length;
 
   return (
-    <div className="relative min-h-screen bg-background">
+    <div className={fullscreenRequired ? 'exam-shell-fullscreen relative bg-background' : 'relative min-h-screen bg-background'}>
       {watermarkEnabled && (
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center overflow-hidden opacity-[0.06]">
           <p className="rotate-[-30deg] text-4xl font-bold select-none">{user?.email} · {session.sessionId.slice(0, 8)}</p>

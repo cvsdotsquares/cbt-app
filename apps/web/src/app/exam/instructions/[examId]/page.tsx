@@ -11,7 +11,7 @@ import { useRequireCandidate } from '@/hooks/use-auth';
 import { Logo } from '@/components/layout/logo';
 import { getExamStatus } from '@/lib/exam-status';
 import { formatExamTimeRange } from '@/lib/exam-dates';
-import { normalizeSecurityPolicy, requestDocumentFullscreen } from '@/lib/exam-security-policy';
+import { normalizeSecurityPolicy } from '@/lib/exam-security-policy';
 import { AlertTriangle, Clock, Shield, CheckCircle2, ArrowLeft, Calendar } from 'lucide-react';
 
 type ExamInstructions = {
@@ -50,7 +50,11 @@ export default function ExamInstructionsPage() {
   );
   if (!exam) return <div className="flex min-h-screen items-center justify-center mesh-bg">Loading exam details...</div>;
 
-  const settings = exam.settings ?? { durationMinutes: 30, passingScore: 40, negativeMarking: true };
+  const settings = {
+    durationMinutes: (exam.settings?.durationMinutes as number | undefined) ?? 30,
+    passingScore: (exam.settings?.passingScore as number | undefined) ?? 40,
+    negativeMarking: (exam.settings?.negativeMarking as boolean | undefined) ?? false,
+  };
   const security = normalizeSecurityPolicy(exam.securityPolicy);
   const tz = exam.timezone || DEFAULT_EXAM_TIMEZONE;
   const status = getExamStatus({
@@ -155,11 +159,6 @@ export default function ExamInstructionsPage() {
           size="lg"
           disabled={!canBegin}
           onClick={() => {
-            if (security.fullscreen) {
-              // Fire synchronously while the click gesture is active; navigation can
-              // cancel fullscreen if we await before routing.
-              void requestDocumentFullscreen();
-            }
             router.push(`/exam/start/${examId}`);
           }}
         >

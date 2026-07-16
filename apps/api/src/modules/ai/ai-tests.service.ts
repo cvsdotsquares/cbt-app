@@ -97,21 +97,46 @@ export class AiTestsService {
       throw new BadRequestException('OpenAI API key is required for AI question generation');
     }
 
+    const count = params.count ?? 10;
     const recentHashes = await this.getRecentQuestionHashes(params.tenantId, params.batchId);
-    const questions = await this.generateFromContext(chunks, params, subject.name);
-    const deduped = questions.filter((q) => {
-      const hash = this.hashQuestion(q.content.text);
-      return !recentHashes.has(hash);
-    });
+    const usedHashes = new Set(recentHashes);
+    const collected: GeneratedQuestion[] = [];
+    const maxAttempts = 3;
 
-    if (!deduped.length) {
-      throw new BadRequestException('Could not generate unique questions from uploaded content. Try different chapters.');
+    for (let attempt = 0; attempt < maxAttempts && collected.length < count; attempt++) {
+      const need = count - collected.length;
+      const batch = await this.generateFromContext(
+        chunks,
+        { ...params, count: need },
+        subject.name,
+      );
+
+      for (const q of batch) {
+        const hash = this.hashQuestion(q.content.text);
+        if (usedHashes.has(hash)) continue;
+        usedHashes.add(hash);
+        collected.push(q);
+        if (collected.length >= count) break;
+      }
+
+      if (collected.length < count) {
+        this.logger.warn(
+          `RAG fulfillment attempt ${attempt + 1}/${maxAttempts}: have ${collected.length}/${count} unique questions`,
+        );
+      }
+    }
+
+    if (collected.length < count) {
+      throw new BadRequestException(
+        `Could only generate ${collected.length} of ${count} unique questions from uploaded content. `
+        + 'Upload more material, select different chapters, or try a lower question count.',
+      );
     }
 
     const avgConfidence = chunks.reduce((s, c) => s + c.score, 0) / chunks.length;
 
     return {
-      questions: deduped.slice(0, params.count ?? 10),
+      questions: collected.slice(0, count),
       source: 'rag' as const,
       chunks,
       sourceChunkIds: chunks.map((c) => c.id),
@@ -216,7 +241,7 @@ export class AiTestsService {
       options: shuffled.options,
       correctAnswer: { value: shuffled.correct },
       marks: q.marks ?? 2,
-      negativeMarks: q.negativeMarks ?? 0.5,
+      negativeMarks: q.negativeMarks ?? 0,
       explanation: q.explanation,
     };
   }
@@ -337,7 +362,7 @@ Generate exactly ${count} high-quality MCQ-style questions grounded in the sourc
 Return JSON: { "questions": [ ... ] }
 Each item: title (short admin label), content.text (full student-facing question, min 30 chars),
 type (${types.join('|')}), difficulty (EASY|MEDIUM|HARD),
-options {a,b,c,d}, correctAnswer {value: "a"|"b"|"c"|"d"}, marks, negativeMarks
+options {a,b,c,d}, correctAnswer {value: "a"|"b"|"c"|"d"}, marks (use 2), negativeMarks (use 0)
 Vary the correct option across questions — do not always use "a".`;
 
     return { systemPrompt, userPrompt };
@@ -378,6 +403,8 @@ Vary the correct option across questions — do not always use "a".`;
               properties: {
                 questions: {
                   type: 'array',
+                  minItems: count,
+                  maxItems: count,
                   items: {
                     type: 'object',
                     properties: {
@@ -459,43 +486,46 @@ Vary the correct option across questions — do not always use "a".`;
     );
 
     try {
-      const raw = await this.callQuestionGenerationApi(systemPrompt, userPrompt, count, types);
-      let normalized = raw
-        .map((q, i) => this.normalizeGeneratedQuestion(q, {
-          subjectName,
-          index: i,
-          defaultType: types[i % types.length],
-          defaultDifficulty: difficulty,
-        }))
-        .filter((q): q is GeneratedQuestion => q !== null);
+      const seen = new Set<string>();
+      const normalized: GeneratedQuestion[] = [];
+      const maxPasses = 2;
 
-      if (normalized.length < count) {
+      for (let pass = 0; pass < maxPasses && normalized.length < count; pass++) {
         const need = count - normalized.length;
-        const retry = this.buildQuestionGenerationPrompts(
-          subjectName,
-          difficulty,
+        const prompts = pass === 0
+          ? { systemPrompt, userPrompt }
+          : this.buildQuestionGenerationPrompts(
+              subjectName,
+              difficulty,
+              need,
+              types,
+              context,
+              `Previous output had invalid or incomplete questions. `
+              + `Generate exactly ${need} MORE proper exam questions. `
+              + 'Each content.text must be a full interrogative sentence testing content from the source. '
+              + 'Do NOT use chapter or section names as questions.',
+            );
+
+        const raw = await this.callQuestionGenerationApi(
+          prompts.systemPrompt,
+          prompts.userPrompt,
           need,
           types,
-          context,
-          `Previous output had ${raw.length - normalized.length} invalid questions that were chapter titles or not proper questions. `
-          + 'Each content.text must be a full interrogative sentence testing content from the source. '
-          + 'Do NOT repeat chapter or section names as questions.',
         );
-        const retryRaw = await this.callQuestionGenerationApi(
-          retry.systemPrompt,
-          retry.userPrompt,
-          need,
-          types,
-        );
-        const retryNormalized = retryRaw
-          .map((q, i) => this.normalizeGeneratedQuestion(q, {
+
+        for (let i = 0; i < raw.length && normalized.length < count; i++) {
+          const q = this.normalizeGeneratedQuestion(raw[i], {
             subjectName,
-            index: normalized.length + i,
-            defaultType: types[(normalized.length + i) % types.length],
+            index: normalized.length,
+            defaultType: types[normalized.length % types.length],
             defaultDifficulty: difficulty,
-          }))
-          .filter((q): q is GeneratedQuestion => q !== null);
-        normalized = [...normalized, ...retryNormalized];
+          });
+          if (!q) continue;
+          const key = q.content.text.toLowerCase().trim();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          normalized.push(q);
+        }
       }
 
       if (!normalized.length) {
@@ -566,6 +596,18 @@ Vary the correct option across questions — do not always use "a".`;
     return q;
   }
 
+  private aiExamSettings(
+    durationMinutes: number,
+    extra: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      durationMinutes,
+      passingScore: 40,
+      negativeMarking: false,
+      ...extra,
+    };
+  }
+
   async createAiTest(
     tenantId: string,
     userId: string,
@@ -592,6 +634,8 @@ Vary the correct option across questions — do not always use "a".`;
       throw new BadRequestException('Choose a subject or enable all subjects');
     }
 
+    const expectedCount = config.questionCount ?? 10;
+
     const generated = await this.generateRagQuestions({
       tenantId,
       userId,
@@ -600,10 +644,17 @@ Vary the correct option across questions — do not always use "a".`;
       chapterIds: config.chapterIds,
       topicIds: config.topicIds,
       syllabusScope: (config.syllabusScope as RagGenerateParams['syllabusScope']) ?? 'COMPLETED_ONLY',
-      count: config.questionCount ?? 10,
+      count: expectedCount,
       difficulty: config.difficulty ?? 'MEDIUM',
       types: config.questionTypes ?? ['MCQ'],
     });
+
+    const questionsToAttach = generated.questions.slice(0, expectedCount);
+    if (questionsToAttach.length !== expectedCount) {
+      throw new BadRequestException(
+        `Expected ${expectedCount} questions but got ${questionsToAttach.length}. Please try again.`,
+      );
+    }
 
     const now = new Date();
     const end = new Date(now.getTime() + (config.durationMinutes ?? 60) * 60 * 1000);
@@ -615,20 +666,19 @@ Vary the correct option across questions — do not always use "a".`;
       type: 'AI_ASSESSMENT',
       startTime: now.toISOString(),
       endTime: end.toISOString(),
-      settings: {
-        durationMinutes: config.durationMinutes ?? 60,
+      settings: this.aiExamSettings(config.durationMinutes ?? 60, {
         aiGenerated: true,
         subjectId: config.subjectId,
         chapterIds: config.chapterIds,
-      },
-      securityPolicy: { proctoringEnabled: false, fullscreen: false },
+      }),
+      securityPolicy: { proctoringEnabled: false, fullscreen: true, blockCopyPaste: true, blockRightClick: true },
       sections: [{ name: 'Section A', orderIndex: 0, durationMinutes: config.durationMinutes ?? 60 }],
     });
 
     const section = exam.sections[0];
     const questionIds: string[] = [];
 
-    for (const gq of generated.questions) {
+    for (const gq of questionsToAttach) {
       const q = await this.saveGeneratedQuestion(tenantId, userId, gq, generated, config.batchId);
 
       await this.prisma.examQuestion.create({
@@ -653,7 +703,7 @@ Vary the correct option across questions — do not always use "a".`;
         title: config.title,
         chapterIds: config.chapterIds ?? [],
         topicIds: config.topicIds ?? [],
-        questionCount: config.questionCount ?? 10,
+        questionCount: expectedCount,
         questionTypes: config.questionTypes ?? ['MCQ'],
         syllabusScope: config.syllabusScope ?? 'COMPLETED_ONLY',
         examId: exam.id,
@@ -710,8 +760,13 @@ Vary the correct option across questions — do not always use "a".`;
       );
     }
 
-    const perSubject = config.questionsPerSubject
-      ?? Math.max(3, Math.floor((config.questionCount ?? 20) / studied.length));
+    const requestedTotal = config.questionCount
+      ?? (config.questionsPerSubject != null
+        ? config.questionsPerSubject * studied.length
+        : 20);
+    const subjectCounts = config.questionsPerSubject != null
+      ? studied.map(() => config.questionsPerSubject!)
+      : this.distributeQuestionCounts(requestedTotal, studied.length);
 
     const now = new Date();
     const duration = config.durationMinutes ?? 90;
@@ -724,14 +779,13 @@ Vary the correct option across questions — do not always use "a".`;
       type: 'AI_ASSESSMENT',
       startTime: now.toISOString(),
       endTime: end.toISOString(),
-      settings: {
-        durationMinutes: duration,
+      settings: this.aiExamSettings(duration, {
         aiGenerated: true,
         combinedSubjects: true,
         batchId: config.batchId,
         subjects: studied.map((s) => s.subjectName),
-      },
-      securityPolicy: { proctoringEnabled: false, fullscreen: false },
+      }),
+      securityPolicy: { proctoringEnabled: false, fullscreen: true, blockCopyPaste: true, blockRightClick: true },
       sections: studied.map((s, i) => ({
         name: s.subjectName,
         orderIndex: i,
@@ -744,9 +798,12 @@ Vary the correct option across questions — do not always use "a".`;
     const scope = (config.syllabusScope as RagGenerateParams['syllabusScope']) ?? 'COMPLETED_ONLY';
 
     for (let si = 0; si < studied.length; si++) {
-      const { subjectId, subjectName, chapterIds } = studied[si];
+      const { subjectId, chapterIds } = studied[si];
       const section = exam.sections[si];
       if (!section) continue;
+
+      const subjectCount = subjectCounts[si] ?? 0;
+      if (subjectCount <= 0) continue;
 
       const generated = await this.generateRagQuestions({
         tenantId,
@@ -755,12 +812,19 @@ Vary the correct option across questions — do not always use "a".`;
         batchId: config.batchId,
         chapterIds,
         syllabusScope: scope,
-        count: perSubject,
+        count: subjectCount,
         difficulty: config.difficulty ?? 'MEDIUM',
         types: config.questionTypes ?? ['MCQ'],
       });
 
-      for (const gq of generated.questions) {
+      const questionsToAttach = generated.questions.slice(0, subjectCount);
+      if (questionsToAttach.length !== subjectCount) {
+        throw new BadRequestException(
+          `Expected ${subjectCount} questions for ${studied[si].subjectName} but got ${questionsToAttach.length}.`,
+        );
+      }
+
+      for (const gq of questionsToAttach) {
         const q = await this.saveGeneratedQuestion(tenantId, userId, gq, generated, config.batchId);
 
         await this.prisma.examQuestion.create({
@@ -789,7 +853,10 @@ Vary the correct option across questions — do not always use "a".`;
         syllabusScope: config.syllabusScope ?? 'COMPLETED_ONLY',
         examId: exam.id,
         createdById: userId,
-        difficultyMix: { perSubject, subjects: studied.map((s) => s.subjectName) },
+        difficultyMix: {
+          subjectCounts,
+          subjects: studied.map((s) => s.subjectName),
+        },
       },
     });
 
@@ -806,13 +873,21 @@ Vary the correct option across questions — do not always use "a".`;
     return {
       exam: { ...exam, status: 'DRAFT' },
       questionCount: totalQuestions,
-      subjects: studied.map((s) => ({
+      subjects: studied.map((s, i) => ({
         name: s.subjectName,
         studiedChapters: s.chapterIds.length,
-        questions: perSubject,
+        questions: subjectCounts[i] ?? 0,
       })),
       message: `Draft combined exam (${totalQuestions} questions). Review and publish from Exams.`,
     };
+  }
+
+  /** Split a total question count across subjects, giving +1 to the first `remainder` subjects. */
+  private distributeQuestionCounts(total: number, subjectCount: number): number[] {
+    if (subjectCount <= 0) return [];
+    const base = Math.max(1, Math.floor(total / subjectCount));
+    const remainder = total - base * subjectCount;
+    return Array.from({ length: subjectCount }, (_, i) => base + (i < remainder ? 1 : 0));
   }
 
   async generateExplanation(questionText: string, correctAnswer: string, chunks?: RetrievedChunk[]) {

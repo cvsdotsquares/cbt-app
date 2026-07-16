@@ -207,7 +207,7 @@ async function main() {
             options: q.options,
             correctAnswer: { value: q.answer },
             marks: 2,
-            negativeMarks: 0.5,
+            negativeMarks: 0,
             approvedById: admin.id,
             approvedAt: new Date(),
           },
@@ -245,7 +245,7 @@ async function main() {
         settings: {
           durationMinutes: 30,
           passingScore: 40,
-          negativeMarking: true,
+          negativeMarking: false,
           shuffleQuestions: false,
           showResultImmediately: true,
         },
@@ -260,7 +260,7 @@ async function main() {
         createdById: admin.id,
         publishedAt: new Date(),
         sections: {
-          create: [{ name: 'Section A - General', orderIndex: 1, durationMinutes: 30, negativeMarking: true }],
+          create: [{ name: 'Section A - General', orderIndex: 1, durationMinutes: 30, negativeMarking: false }],
         },
       },
       include: { sections: true },
