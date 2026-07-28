@@ -92,6 +92,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.EXAM_RESUME, Permission.EXAM_VIEW_RESPONSE,
     Permission.CODING_EXECUTE,
     Permission.RESULT_READ, Permission.RESULT_CERTIFICATE,
+    Permission.LEARNING_READ,
   ],
 
   [Role.AUDITOR]: [
@@ -142,6 +143,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.CURRICULUM_READ,
     Permission.BATCH_READ,
     Permission.SYLLABUS_MANAGE, Permission.SYLLABUS_READ,
+    Permission.QUESTION_READ, Permission.QUESTION_UPDATE,
     Permission.EXAM_CREATE, Permission.EXAM_READ, Permission.EXAM_UPDATE,
     Permission.EXAM_PUBLISH, Permission.EXAM_SCHEDULE, Permission.EXAM_ASSIGN_CANDIDATES,
     Permission.EXAM_VIEW_RESPONSE,

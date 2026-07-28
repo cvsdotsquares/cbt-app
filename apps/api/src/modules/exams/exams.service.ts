@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ExamType } from '@prisma/client';
-import { DEFAULT_EXAM_TIMEZONE, parseExamDateTime } from '@cbt/shared';
+import { DEFAULT_EXAM_TIMEZONE, parseExamDateTime, validateExamSchedule } from '@cbt/shared';
 import { resolveCandidateId } from '../../common/utils/candidate.util';
 import { parsePage, parseLimit } from '../../common/utils/pagination.util';
 import {
@@ -11,6 +11,27 @@ import {
 @Injectable()
 export class ExamsService {
   constructor(private prisma: PrismaService) {}
+
+  async assertTitleUnique(tenantId: string, title: string, excludeId?: string) {
+    const normalized = title.trim();
+    if (!normalized) {
+      throw new BadRequestException('Test name is required');
+    }
+    const existing = await this.prisma.exam.findFirst({
+      where: {
+        tenantId,
+        title: { equals: normalized, mode: 'insensitive' },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      select: { id: true, title: true },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `A test named "${existing.title}" already exists. Choose a unique test name.`,
+      );
+    }
+    return normalized;
+  }
 
   async create(
     tenantId: string,
@@ -27,15 +48,29 @@ export class ExamsService {
       sections?: { name: string; orderIndex: number; durationMinutes?: number }[];
     },
   ) {
+    const title = await this.assertTitleUnique(tenantId, data.title);
+    const timezone = data.timezone || DEFAULT_EXAM_TIMEZONE;
+    const startTime = parseExamDateTime(data.startTime, timezone);
+    const endTime = parseExamDateTime(data.endTime, timezone);
+    const durationMinutes = typeof data.settings?.durationMinutes === 'number'
+      ? data.settings.durationMinutes
+      : null;
+    const scheduleCheck = validateExamSchedule(startTime, endTime, durationMinutes, {
+      disallowPastStart: true,
+    });
+    if (!scheduleCheck.ok) {
+      throw new BadRequestException(scheduleCheck.message);
+    }
+
     return this.prisma.exam.create({
       data: {
         tenantId,
-        title: data.title,
+        title,
         code: data.code,
         type: data.type,
-        startTime: parseExamDateTime(data.startTime, data.timezone || DEFAULT_EXAM_TIMEZONE),
-        endTime: parseExamDateTime(data.endTime, data.timezone || DEFAULT_EXAM_TIMEZONE),
-        timezone: data.timezone || DEFAULT_EXAM_TIMEZONE,
+        startTime,
+        endTime,
+        timezone,
         settings: (data.settings || {}) as never,
         securityPolicy: (data.securityPolicy || {}) as never,
         createdById: userId,
@@ -151,7 +186,7 @@ export class ExamsService {
   async updateSchedule(
     id: string,
     tenantId: string,
-    data: { startTime: string; endTime: string; timezone?: string },
+    data: { startTime: string; endTime: string; timezone?: string; durationMinutes?: number },
   ) {
     const exam = await this.prisma.exam.findFirst({ where: { id, tenantId } });
     if (!exam) throw new NotFoundException('Exam not found');
@@ -160,12 +195,36 @@ export class ExamsService {
     }
 
     const timezone = data.timezone || exam.timezone || DEFAULT_EXAM_TIMEZONE;
+    const startTime = parseExamDateTime(data.startTime, timezone);
+    const endTime = parseExamDateTime(data.endTime, timezone);
+    const existingSettings = (exam.settings || {}) as Record<string, unknown>;
+    const currentDuration = typeof existingSettings.durationMinutes === 'number'
+      ? existingSettings.durationMinutes
+      : null;
+    const durationMinutes = typeof data.durationMinutes === 'number' && data.durationMinutes > 0
+      ? Math.round(data.durationMinutes)
+      : currentDuration;
+
+    if (typeof data.durationMinutes === 'number' && data.durationMinutes <= 0) {
+      throw new BadRequestException('Duration must be at least 1 minute.');
+    }
+
+    const scheduleCheck = validateExamSchedule(startTime, endTime, durationMinutes, {
+      disallowPastStart: true,
+    });
+    if (!scheduleCheck.ok) {
+      throw new BadRequestException(scheduleCheck.message);
+    }
+
     return this.prisma.exam.update({
       where: { id },
       data: {
-        startTime: parseExamDateTime(data.startTime, timezone),
-        endTime: parseExamDateTime(data.endTime, timezone),
+        startTime,
+        endTime,
         timezone,
+        ...(durationMinutes != null
+          ? { settings: { ...existingSettings, durationMinutes } as never }
+          : {}),
       },
     });
   }

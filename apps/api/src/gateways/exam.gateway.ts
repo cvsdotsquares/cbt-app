@@ -131,43 +131,52 @@ export class ExamGateway implements OnGatewayConnection {
 
 
   @SubscribeMessage('exam:heartbeat')
-
   async handleHeartbeat(
-
     @ConnectedSocket() client: Socket,
-
-    @MessageBody() data: { sessionId: string },
-
+    @MessageBody() data: {
+      sessionId: string;
+      answers?: {
+        questionId: string;
+        answer: unknown;
+        timeSpentSeconds?: number;
+        markedForReview?: boolean;
+      }[];
+    },
   ) {
-
     const user = this.wsAuth.requireAuth(client);
-
     if (!user) return;
-
-    return { event: 'exam:heartbeat-ack', data: await this.examEngineService.heartbeat(data.sessionId, user.sub) };
-
+    return {
+      event: 'exam:heartbeat-ack',
+      data: await this.examEngineService.heartbeat(data.sessionId, user.sub, data.answers),
+    };
   }
 
 
 
   @SubscribeMessage('exam:submit')
-
   async handleSubmit(
-
     @ConnectedSocket() client: Socket,
-
-    @MessageBody() data: { sessionId: string },
-
+    @MessageBody() data: {
+      sessionId: string;
+      answers?: {
+        questionId: string;
+        answer: unknown;
+        timeSpentSeconds?: number;
+        markedForReview?: boolean;
+      }[];
+    },
   ) {
-
     const user = this.wsAuth.requireAuth(client);
-
     if (!user) return;
-
-    const result = await this.examEngineService.submitSession(data.sessionId, user.sub);
-
-    return { event: 'exam:submitted', data: { sessionId: data.sessionId, submittedAt: result.session.submittedAt } };
-
+    const result = await this.examEngineService.submitSession(data.sessionId, user.sub, data.answers);
+    return {
+      event: 'exam:submitted',
+      data: {
+        sessionId: data.sessionId,
+        submittedAt: result.session.submittedAt,
+        result: result.result,
+      },
+    };
   }
 
 }

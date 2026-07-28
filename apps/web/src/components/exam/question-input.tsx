@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -17,9 +17,7 @@ interface QuestionInputProps {
   onSave: (value: string | string[]) => void;
 }
 
-const TEXT_DEBOUNCE_MS = 800;
-
-function DebouncedTextarea({
+function SyncedTextarea({
   value,
   onSave,
   ...props
@@ -28,20 +26,10 @@ function DebouncedTextarea({
   onSave: (value: string) => void;
 } & React.ComponentProps<typeof Textarea>) {
   const [local, setLocal] = useState(value);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setLocal(value);
   }, [value, props.placeholder]);
-
-  useEffect(() => () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-  }, []);
-
-  const scheduleSave = (next: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => onSave(next), TEXT_DEBOUNCE_MS);
-  };
 
   return (
     <Textarea
@@ -50,12 +38,9 @@ function DebouncedTextarea({
       onChange={(e) => {
         const next = e.target.value;
         setLocal(next);
-        scheduleSave(next);
+        onSave(next);
       }}
-      onBlur={(e) => {
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        onSave(e.target.value);
-      }}
+      onBlur={(e) => onSave(e.target.value)}
     />
   );
 }
@@ -115,7 +100,7 @@ export function QuestionInput({ question, answer, onSave }: QuestionInputProps) 
 
   if (type === 'SUBJECTIVE' || type === 'CASE_STUDY') {
     return (
-      <DebouncedTextarea
+      <SyncedTextarea
         placeholder="Type your answer here..."
         rows={8}
         value={(answer as string) ?? ''}
@@ -128,7 +113,7 @@ export function QuestionInput({ question, answer, onSave }: QuestionInputProps) 
     return (
       <div className="space-y-2">
         <p className="text-sm text-muted-foreground">Write your code solution below.</p>
-        <DebouncedTextarea
+        <SyncedTextarea
           placeholder="// Your code here..."
           rows={12}
           className="font-mono text-sm"
@@ -171,7 +156,7 @@ export function QuestionInput({ question, answer, onSave }: QuestionInputProps) 
   }
 
   return (
-    <DebouncedTextarea
+    <SyncedTextarea
       placeholder="Type your answer..."
       rows={4}
       value={(answer as string) ?? ''}

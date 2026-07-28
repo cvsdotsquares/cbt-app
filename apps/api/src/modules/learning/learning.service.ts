@@ -18,11 +18,11 @@ export class LearningService {
         topicMasteries: {
           include: { topic: { include: { chapter: true } }, subject: true },
           orderBy: { accuracy: 'asc' },
-          take: 10,
+          take: 20,
         },
         weakAreaRecommendations: {
           where: { isResolved: false },
-          include: { topic: true },
+          include: { topic: { include: { chapter: true } } },
           orderBy: { priority: 'desc' },
           take: 5,
         },
@@ -40,6 +40,70 @@ export class LearningService {
       ? candidate.results.reduce((s, r) => s + r.percentage, 0) / candidate.results.length
       : null;
 
+    const syllabusCoverage = await Promise.all(
+      candidate.batchEnrollments.map(async (enrollment) => {
+        const batchId = enrollment.batchId;
+        // Only Done chapters — same scope used when creating AI class tests
+        const progress = await this.prisma.syllabusProgress.findMany({
+          where: {
+            batchId,
+            chapterId: { not: null },
+            status: 'COMPLETED',
+          },
+          include: {
+            chapter: {
+              select: {
+                id: true,
+                number: true,
+                title: true,
+                book: { select: { subject: { select: { id: true, name: true } } } },
+              },
+            },
+          },
+        });
+
+        const chapters = progress
+          .filter((p) => p.chapter)
+          .map((p) => ({
+            id: p.chapter!.id,
+            number: p.chapter!.number,
+            title: p.chapter!.title,
+            status: p.status,
+            subject: p.chapter!.book.subject,
+          }))
+          .filter((ch, i, arr) => arr.findIndex((x) => x.id === ch.id) === i)
+          .sort((a, b) =>
+            a.subject.name.localeCompare(b.subject.name) || a.number - b.number,
+          );
+
+        const bySubject = new Map<string, {
+          subject: { id: string; name: string };
+          chapters: typeof chapters;
+        }>();
+        for (const ch of chapters) {
+          const existing = bySubject.get(ch.subject.id);
+          if (existing) existing.chapters.push(ch);
+          else bySubject.set(ch.subject.id, { subject: ch.subject, chapters: [ch] });
+        }
+
+        return {
+          batch: {
+            id: enrollment.batch.id,
+            name: enrollment.batch.name,
+            className: enrollment.batch.academicClass.name,
+          },
+          chapters,
+          subjects: [...bySubject.values()],
+          stats: {
+            total: chapters.length,
+            done: chapters.length,
+            studying: 0,
+            subjectCount: bySubject.size,
+          },
+        };
+      }),
+    );
+
     return {
       profile: {
         fullName: `${candidate.user.firstName} ${candidate.user.lastName}`,
@@ -52,10 +116,12 @@ export class LearningService {
         averageScore: avgScore,
         weakTopics: candidate.weakAreaRecommendations.length,
         masteredTopics: candidate.topicMasteries.filter((m) => m.accuracy >= 70).length,
+        doneChapters: syllabusCoverage.reduce((sum, b) => sum + b.stats.done, 0),
       },
       recentResults: candidate.results,
       weakAreas: candidate.weakAreaRecommendations,
       topicMasteries: candidate.topicMasteries,
+      syllabusCoverage,
     };
   }
 
@@ -146,6 +212,56 @@ export class LearningService {
     }
 
     return mastery;
+  }
+
+  /**
+   * Resolve syllabus topic + subject for a question and update candidate mastery.
+   * Uses question.syllabusTopicId, then generated-record source topic/chapter.
+   */
+  async recordAnswerMastery(candidateId: string, questionId: string, isCorrect: boolean) {
+    const question = await this.prisma.question.findUnique({
+      where: { id: questionId },
+      select: {
+        syllabusTopicId: true,
+        syllabusTopic: {
+          select: {
+            id: true,
+            chapter: { select: { book: { select: { subjectId: true } } } },
+          },
+        },
+      },
+    });
+    if (!question) return null;
+
+    let topicId = question.syllabusTopicId;
+    let subjectId = question.syllabusTopic?.chapter.book.subjectId;
+
+    if (!topicId || !subjectId) {
+      const generated = await this.prisma.generatedQuestionRecord.findFirst({
+        where: { questionId },
+        select: { sourceTopicId: true, sourceChapterId: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (generated?.sourceTopicId) {
+        const topic = await this.prisma.syllabusTopic.findUnique({
+          where: { id: generated.sourceTopicId },
+          select: { id: true, chapter: { select: { book: { select: { subjectId: true } } } } },
+        });
+        topicId = topic?.id ?? topicId;
+        subjectId = topic?.chapter.book.subjectId ?? subjectId;
+      } else if (generated?.sourceChapterId) {
+        const topic = await this.prisma.syllabusTopic.findFirst({
+          where: { chapterId: generated.sourceChapterId },
+          orderBy: { orderIndex: 'asc' },
+          select: { id: true, chapter: { select: { book: { select: { subjectId: true } } } } },
+        });
+        topicId = topic?.id ?? topicId;
+        subjectId = topic?.chapter.book.subjectId ?? subjectId;
+      }
+    }
+
+    if (!topicId || !subjectId) return null;
+    return this.updateMastery(candidateId, topicId, subjectId, isCorrect);
   }
 
   async getRecommendations(candidateId: string) {

@@ -76,11 +76,11 @@ export class ExamsController {
 
   @Patch(':id/schedule')
   @RequirePermissions(Permission.EXAM_UPDATE)
-  @ApiOperation({ summary: 'Update exam schedule and timezone' })
+  @ApiOperation({ summary: 'Update exam schedule, duration, and timezone' })
   updateSchedule(
     @Param('id') id: string,
     @CurrentUser('tenantId') tenantId: string,
-    @Body() body: { startTime: string; endTime: string; timezone?: string },
+    @Body() body: { startTime: string; endTime: string; timezone?: string; durationMinutes?: number },
   ) {
     return this.examsService.updateSchedule(id, tenantId, body);
   }

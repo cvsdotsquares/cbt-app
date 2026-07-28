@@ -144,24 +144,37 @@ export class ExamEngineController {
 
   @ApiOperation({ summary: 'Submit exam' })
 
-  submit(@Param('id') sessionId: string, @CurrentUser('sub') userId: string) {
-
-    return this.examEngineService.submitSession(sessionId, userId);
-
+  submit(
+    @Param('id') sessionId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body?: {
+      answers?: {
+        questionId: string;
+        answer: unknown;
+        timeSpentSeconds?: number;
+        markedForReview?: boolean;
+      }[];
+    },
+  ) {
+    return this.examEngineService.submitSession(sessionId, userId, body?.answers);
   }
 
-
-
   @Post(':id/heartbeat')
-
   @RequirePermissions(Permission.EXAM_TAKE)
-
   @ApiOperation({ summary: 'Session heartbeat' })
-
-  heartbeat(@Param('id') sessionId: string, @CurrentUser('sub') userId: string) {
-
-    return this.examEngineService.heartbeat(sessionId, userId);
-
+  heartbeat(
+    @Param('id') sessionId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body?: {
+      answers?: {
+        questionId: string;
+        answer: unknown;
+        timeSpentSeconds?: number;
+        markedForReview?: boolean;
+      }[];
+    },
+  ) {
+    return this.examEngineService.heartbeat(sessionId, userId, body?.answers);
   }
 
 }

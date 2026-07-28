@@ -67,6 +67,12 @@ export class AiTestsService {
           + 'and ensure matching books are uploaded.',
         );
       }
+    } else if (params.syllabusScope === 'SELECTED') {
+      if (!chapterIds.length) {
+        throw new BadRequestException(
+          'Select at least one chapter with uploaded documents for this test.',
+        );
+      }
     } else if (!chapterIds.length) {
       chapterIds = [...uploaded];
     }
@@ -572,6 +578,21 @@ Vary the correct option across questions — do not always use "a".`;
       tags: ['ai-generated', 'upload-sourced'],
     });
 
+    // Link to a syllabus topic under the source chapter so student mastery can be tracked
+    if (generated.sourceChapterId) {
+      const topic = await this.prisma.syllabusTopic.findFirst({
+        where: { chapterId: generated.sourceChapterId },
+        orderBy: { orderIndex: 'asc' },
+        select: { id: true },
+      });
+      if (topic) {
+        await this.prisma.question.update({
+          where: { id: q.id },
+          data: { syllabusTopicId: topic.id },
+        });
+      }
+    }
+
     const versionId = q.versions?.[0]?.id;
     if (versionId) {
       await this.prisma.question.update({
@@ -627,6 +648,9 @@ Vary the correct option across questions — do not always use "a".`;
       assignToBatch?: boolean;
     },
   ) {
+    const title = await this.examsService.assertTitleUnique(tenantId, config.title);
+    config = { ...config, title };
+
     if (config.allSubjects && config.batchId) {
       return this.createCombinedAiTest(tenantId, userId, config);
     }

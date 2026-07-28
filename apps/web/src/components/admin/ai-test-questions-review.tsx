@@ -9,11 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { examsApi, questionsApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle2, Edit3, ExternalLink, Loader2 } from 'lucide-react';
+import { CheckCircle2, Edit3, ExternalLink, Loader2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 type ExamQuestionRow = {
@@ -87,6 +87,7 @@ export function AiTestQuestionsReview({
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<ExamQuestionRow | null>(null);
   const [form, setForm] = useState<EditForm | null>(null);
+  const [deleting, setDeleting] = useState<ExamQuestionRow | null>(null);
 
   const { data: exam, isLoading } = useQuery({
     queryKey: ['exam', examId],
@@ -150,6 +151,21 @@ export function AiTestQuestionsReview({
     onError: (e: Error) => toast({ title: 'Update failed', description: e.message, variant: 'destructive' }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (questionId: string) => examsApi.removeQuestion(accessToken, examId, questionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['exam', examId] });
+      queryClient.invalidateQueries({ queryKey: ['exams'] });
+      toast({ title: 'Question removed', variant: 'success' });
+      setDeleting(null);
+      if (editing && deleting && editing.questionId === deleting.questionId) {
+        setEditing(null);
+        setForm(null);
+      }
+    },
+    onError: (e: Error) => toast({ title: 'Could not remove question', description: e.message, variant: 'destructive' }),
+  });
+
   const openEdit = (row: ExamQuestionRow) => {
     setEditing(row);
     setForm(toEditForm(row));
@@ -164,7 +180,9 @@ export function AiTestQuestionsReview({
             <div>
               <p className="font-semibold">Draft exam created</p>
               <p className="text-sm text-muted-foreground">
-                {examTitle} — {questionCount ?? rows.length} AI-generated questions. Review and edit below, then publish from Exams.
+                {examTitle} — {isLoading ? (questionCount ?? '…') : rows.length} AI-generated
+                question{!isLoading && rows.length === 1 ? '' : 's'}.
+                Review, edit, or remove below, then publish from Class Tests.
               </p>
             </div>
           </div>
@@ -223,10 +241,22 @@ export function AiTestQuestionsReview({
                     Marks: {row.marks} · Negative: {row.negativeMarks}
                   </p>
                 </div>
-                <Button size="sm" variant="outline" className="shrink-0" onClick={() => openEdit(row)}>
-                  <Edit3 className="mr-1.5 h-4 w-4" />
-                  Edit
-                </Button>
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                  <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
+                    <Edit3 className="mr-1.5 h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => setDeleting(row)}
+                  >
+                    <Trash2 className="mr-1.5 h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
               </div>
             </div>
           ))}
@@ -302,10 +332,59 @@ export function AiTestQuestionsReview({
               </div>
             </div>
           )}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              variant="outline"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={deleteMutation.isPending || !editing}
+              onClick={() => editing && setDeleting(editing)}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Delete
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => { setEditing(null); setForm(null); }}>Cancel</Button>
+              <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+                {saveMutation.isPending ? 'Saving…' : 'Save changes'}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleting} onOpenChange={(open) => { if (!open && !deleteMutation.isPending) setDeleting(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove question?</DialogTitle>
+            <DialogDescription>
+              This removes the question from this draft test. You can keep editing the rest before publishing.
+            </DialogDescription>
+          </DialogHeader>
+          {deleting && (
+            <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm leading-snug">
+              {deleting.content || deleting.title}
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditing(null); setForm(null); }}>Cancel</Button>
-            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? 'Saving…' : 'Save changes'}
+            <Button variant="outline" disabled={deleteMutation.isPending} onClick={() => setDeleting(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending || !deleting}
+              onClick={() => deleting && deleteMutation.mutate(deleting.questionId)}
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Removing…
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Remove question
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,13 @@ import { toast } from '@/hooks/use-toast';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { DEFAULT_EXAM_TIMEZONE, localDateTimeToUtcIso } from '@cbt/shared';
+import {
+  DEFAULT_EXAM_TIMEZONE,
+  localDateTimeToUtcIso,
+  nowLocalDateTimeInput,
+  parseExamDateTime,
+  validateExamSchedule,
+} from '@cbt/shared';
 import { EXAM_TIMEZONE_OPTIONS, formatExamTimeRange, utcIsoToLocalDateTimeInput } from '@/lib/exam-dates';
 import { FileText, Users, Clock, HelpCircle, GraduationCap } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/skeleton';
@@ -30,6 +36,22 @@ function questionCount(exam: ExamItem) {
   return (exam.sections || []).reduce((sum, s) => sum + (s._count?.questions ?? 0), 0);
 }
 
+function addMinutesToLocalDateTime(local: string, minutes: number): string {
+  if (!local) return '';
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(local);
+  if (!match) return local;
+  const d = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+  );
+  d.setMinutes(d.getMinutes() + minutes);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function ExamsPage() {
   const { accessToken } = useRequireAuth(true);
   const { can } = usePermissions();
@@ -37,13 +59,92 @@ export default function ExamsPage() {
   const [candidatesDialog, setCandidatesDialog] = useState<{ examId: string; title: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; code: string } | null>(null);
   const [scheduleTarget, setScheduleTarget] = useState<ExamItem | null>(null);
-  const [scheduleForm, setScheduleForm] = useState({ startTime: '', endTime: '', timezone: DEFAULT_EXAM_TIMEZONE });
+  const [scheduleAlert, setScheduleAlert] = useState<string | null>(null);
+  const [scheduleForm, setScheduleForm] = useState({
+    startTime: '',
+    endTime: '',
+    timezone: DEFAULT_EXAM_TIMEZONE,
+    durationMinutes: 30,
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['exams'],
     queryFn: () => examsApi.list(accessToken!),
     enabled: !!accessToken,
   });
+
+  const scheduleWindowMinutes = useMemo(() => {
+    if (!scheduleForm.startTime || !scheduleForm.endTime) return null;
+    try {
+      const start = parseExamDateTime(scheduleForm.startTime, scheduleForm.timezone);
+      const end = parseExamDateTime(scheduleForm.endTime, scheduleForm.timezone);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+      return Math.round((end.getTime() - start.getTime()) / 60_000);
+    } catch {
+      return null;
+    }
+  }, [scheduleForm.startTime, scheduleForm.endTime, scheduleForm.timezone]);
+
+  const scheduleValidation = useMemo(() => {
+    if (!scheduleForm.startTime || !scheduleForm.endTime) {
+      return { ok: false as const, message: 'Choose both start and end times.' };
+    }
+    if (!scheduleForm.durationMinutes || scheduleForm.durationMinutes < 1) {
+      return { ok: false as const, message: 'Duration must be at least 1 minute.' };
+    }
+    try {
+      const start = parseExamDateTime(scheduleForm.startTime, scheduleForm.timezone);
+      const end = parseExamDateTime(scheduleForm.endTime, scheduleForm.timezone);
+      return validateExamSchedule(start, end, scheduleForm.durationMinutes, {
+        disallowPastStart: true,
+      });
+    } catch {
+      return { ok: false as const, message: 'Start and end times must be valid dates.' };
+    }
+  }, [scheduleForm]);
+
+  const startInPast = useMemo(() => {
+    if (!scheduleForm.startTime) return false;
+    try {
+      const start = parseExamDateTime(scheduleForm.startTime, scheduleForm.timezone);
+      return start.getTime() < Date.now();
+    } catch {
+      return false;
+    }
+  }, [scheduleForm.startTime, scheduleForm.timezone]);
+
+  const durationExceedsWindow = useMemo(() => {
+    if (scheduleWindowMinutes == null) return false;
+    return scheduleForm.durationMinutes > scheduleWindowMinutes;
+  }, [scheduleForm.durationMinutes, scheduleWindowMinutes]);
+
+  const durationWindowMismatch = useMemo(() => {
+    if (scheduleWindowMinutes == null) return false;
+    return scheduleForm.durationMinutes !== scheduleWindowMinutes;
+  }, [scheduleForm.durationMinutes, scheduleWindowMinutes]);
+
+  const scheduleIssueMessage = useMemo(() => {
+    if (startInPast) {
+      return 'Start time cannot be in the past. Choose a future start time.';
+    }
+    if (!durationWindowMismatch || scheduleWindowMinutes == null) return null;
+    if (durationExceedsWindow) {
+      return `Duration exceeds the exam window. Duration is ${scheduleForm.durationMinutes} min, but start–end is only ${scheduleWindowMinutes} min. Increase the end time or reduce the duration.`;
+    }
+    return `Duration and exam window do not match. Duration is ${scheduleForm.durationMinutes} min, but start–end spans ${scheduleWindowMinutes} min. Set end time to start + ${scheduleForm.durationMinutes} min, or update the duration.`;
+  }, [
+    startInPast,
+    durationWindowMismatch,
+    durationExceedsWindow,
+    scheduleForm.durationMinutes,
+    scheduleWindowMinutes,
+  ]);
+
+  const startTimeMin = nowLocalDateTimeInput(scheduleForm.timezone);
+
+  const endTimeMin = scheduleForm.startTime
+    ? addMinutesToLocalDateTime(scheduleForm.startTime, 1)
+    : undefined;
 
   const publishMutation = useMutation({
     mutationFn: (id: string) => examsApi.publish(accessToken!, id),
@@ -69,23 +170,74 @@ export default function ExamsPage() {
       startTime: localDateTimeToUtcIso(scheduleForm.startTime, scheduleForm.timezone),
       endTime: localDateTimeToUtcIso(scheduleForm.endTime, scheduleForm.timezone),
       timezone: scheduleForm.timezone,
+      durationMinutes: scheduleForm.durationMinutes,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exams'] });
+      setScheduleAlert(null);
       setScheduleTarget(null);
       toast({ title: 'Schedule updated', variant: 'success' });
     },
-    onError: (e: Error) => toast({ title: 'Update failed', description: e.message, variant: 'destructive' }),
+    onError: (e: Error) => {
+      setScheduleAlert(e.message);
+      toast({ title: 'Update failed', description: e.message, variant: 'destructive' });
+    },
   });
 
   function openScheduleEdit(exam: ExamItem) {
     const tz = exam.timezone || DEFAULT_EXAM_TIMEZONE;
+    const duration = typeof exam.settings?.durationMinutes === 'number' && exam.settings.durationMinutes > 0
+      ? exam.settings.durationMinutes
+      : 30;
+    setScheduleAlert(null);
     setScheduleForm({
       startTime: utcIsoToLocalDateTimeInput(exam.startTime, tz),
       endTime: utcIsoToLocalDateTimeInput(exam.endTime, tz),
       timezone: tz,
+      durationMinutes: duration,
     });
     setScheduleTarget(exam);
+  }
+
+  function updateStartTime(value: string) {
+    setScheduleAlert(null);
+    setScheduleForm((prev) => {
+      const duration = Math.max(1, prev.durationMinutes || 30);
+      return {
+        ...prev,
+        startTime: value,
+        endTime: value ? addMinutesToLocalDateTime(value, duration) : prev.endTime,
+      };
+    });
+  }
+
+  function updateDuration(minutes: number) {
+    setScheduleAlert(null);
+    const duration = Number.isFinite(minutes) ? Math.max(1, Math.round(minutes)) : 1;
+    setScheduleForm((prev) => ({
+      ...prev,
+      durationMinutes: duration,
+      endTime: prev.startTime
+        ? addMinutesToLocalDateTime(prev.startTime, duration)
+        : prev.endTime,
+    }));
+  }
+
+  function handleSaveSchedule() {
+    if (!scheduleForm.startTime || !scheduleForm.endTime) {
+      setScheduleAlert('Choose both start and end times.');
+      return;
+    }
+    if (scheduleIssueMessage) {
+      setScheduleAlert(scheduleIssueMessage);
+      return;
+    }
+    if (!scheduleValidation.ok) {
+      setScheduleAlert(scheduleValidation.message);
+      return;
+    }
+    setScheduleAlert(null);
+    scheduleMutation.mutate();
   }
 
   function canDeleteExam(exam: ExamItem) {
@@ -228,41 +380,103 @@ export default function ExamsPage() {
         />
       )}
 
-      <Dialog open={!!scheduleTarget} onOpenChange={(open) => !open && setScheduleTarget(null)}>
+      <Dialog
+        open={!!scheduleTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setScheduleTarget(null);
+            setScheduleAlert(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit class test schedule</DialogTitle>
             <DialogDescription>
-              Update start/end times for <span className="font-medium">{scheduleTarget?.title}</span>. Times use the selected timezone.
+              Update timing for <span className="font-medium">{scheduleTarget?.title}</span>.
+              End time must match start + duration (e.g. 30 min from 5:00 → end 5:30).
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="space-y-2">
+              <Label>Duration (minutes)</Label>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                value={scheduleForm.durationMinutes}
+                onChange={(e) => updateDuration(parseInt(e.target.value, 10) || 1)}
+              />
+              <p className="text-xs text-muted-foreground">
+                How long each student gets once they start the test.
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label>Start Time</Label>
-              <Input type="datetime-local" value={scheduleForm.startTime} onChange={(e) => setScheduleForm({ ...scheduleForm, startTime: e.target.value })} />
+              <Input
+                type="datetime-local"
+                value={scheduleForm.startTime}
+                min={startTimeMin}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  updateStartTime(startTimeMin && next && next < startTimeMin ? startTimeMin : next);
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label>End Time</Label>
-              <Input type="datetime-local" value={scheduleForm.endTime} onChange={(e) => setScheduleForm({ ...scheduleForm, endTime: e.target.value })} />
+              <Input
+                type="datetime-local"
+                value={scheduleForm.endTime}
+                disabled={!scheduleForm.startTime}
+                min={endTimeMin}
+                onChange={(e) => {
+                  setScheduleAlert(null);
+                  const next = e.target.value;
+                  setScheduleForm({
+                    ...scheduleForm,
+                    endTime: endTimeMin && next && next < endTimeMin ? endTimeMin : next,
+                  });
+                }}
+              />
+              {!scheduleForm.startTime && (
+                <p className="text-xs text-muted-foreground">Choose a start time first.</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Timezone</Label>
               <select
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={scheduleForm.timezone}
-                onChange={(e) => setScheduleForm({ ...scheduleForm, timezone: e.target.value })}
+                onChange={(e) => {
+                  setScheduleAlert(null);
+                  setScheduleForm({ ...scheduleForm, timezone: e.target.value });
+                }}
               >
                 {EXAM_TIMEZONE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
             </div>
+            {(scheduleAlert || scheduleIssueMessage) && (
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+              >
+                {scheduleAlert || scheduleIssueMessage}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setScheduleTarget(null)}>Cancel</Button>
             <Button
-              disabled={scheduleMutation.isPending || !scheduleForm.startTime || !scheduleForm.endTime}
-              onClick={() => scheduleMutation.mutate()}
+              disabled={
+                scheduleMutation.isPending
+                || !scheduleForm.startTime
+                || !scheduleForm.endTime
+                || !!scheduleIssueMessage
+              }
+              onClick={handleSaveSchedule}
             >
               {scheduleMutation.isPending ? 'Saving...' : 'Save schedule'}
             </Button>

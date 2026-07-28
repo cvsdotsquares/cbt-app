@@ -67,3 +67,77 @@ export function parseExamDateTime(value: string, timeZone = DEFAULT_EXAM_TIMEZON
   if (isUtcIsoOrOffset(trimmed)) return new Date(trimmed);
   return new Date(localDateTimeToUtcIso(trimmed, timeZone));
 }
+
+export type ExamScheduleValidation =
+  | { ok: true }
+  | { ok: false; message: string };
+
+export type ValidateExamScheduleOptions = {
+  /** When true, start time must not be in the past. */
+  disallowPastStart?: boolean;
+  /** Grace period in minutes before "now" (default 0). */
+  pastGraceMinutes?: number;
+  now?: Date;
+};
+
+/**
+ * Ensures the exam availability window is coherent:
+ * - both times valid
+ * - end strictly after start
+ * - window at least as long as the configured test duration (when provided)
+ * - optional: start not in the past
+ */
+export function validateExamSchedule(
+  start: Date,
+  end: Date,
+  durationMinutes?: number | null,
+  options?: ValidateExamScheduleOptions,
+): ExamScheduleValidation {
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { ok: false, message: 'Start and end times must be valid dates.' };
+  }
+  if (end.getTime() <= start.getTime()) {
+    return {
+      ok: false,
+      message: 'End time must be after start time. Choose a later end time for the exam window.',
+    };
+  }
+  if (options?.disallowPastStart) {
+    const now = options.now ?? new Date();
+    const graceMs = Math.max(0, options.pastGraceMinutes ?? 0) * 60_000;
+    if (start.getTime() < now.getTime() - graceMs) {
+      return {
+        ok: false,
+        message: 'Start time cannot be in the past. Choose a future start time.',
+      };
+    }
+  }
+  const duration = typeof durationMinutes === 'number' && durationMinutes > 0
+    ? durationMinutes
+    : null;
+  if (duration != null) {
+    const windowMinutes = (end.getTime() - start.getTime()) / 60_000;
+    if (windowMinutes < duration) {
+      return {
+        ok: false,
+        message: `Exam window must be at least ${duration} minutes long (test duration). End time is too early.`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/** Current wall-clock time in `timeZone` as datetime-local value (YYYY-MM-DDTHH:mm). */
+export function nowLocalDateTimeInput(timeZone = DEFAULT_EXAM_TIMEZONE): string {
+  const wall = wallTimeInZone(Date.now(), timeZone);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  // Intl hour12:false can yield 24 for midnight in some environments
+  const hour = wall.hour === 24 ? 0 : wall.hour;
+  return `${wall.year}-${pad(wall.month)}-${pad(wall.day)}T${pad(hour)}:${pad(wall.minute)}`;
+}
+
+/** Compare datetime-local strings (YYYY-MM-DDTHH:mm). Returns true if end is after start. */
+export function isLocalDateTimeAfter(startLocal: string, endLocal: string): boolean {
+  if (!startLocal || !endLocal) return false;
+  return endLocal > startLocal;
+}

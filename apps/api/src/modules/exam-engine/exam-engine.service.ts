@@ -227,22 +227,87 @@ export class ExamEngineService {
     });
   }
 
-  async submitSession(sessionId: string, userId: string) {
+  private async persistPendingAnswers(
+    sessionId: string,
+    answers: {
+      questionId: string;
+      answer: unknown;
+      timeSpentSeconds?: number;
+      markedForReview?: boolean;
+    }[],
+  ) {
+    for (const item of answers) {
+      if (!item?.questionId || item.answer == null || item.answer === '') continue;
+      const answer =
+        typeof item.answer === 'object' && item.answer !== null && 'value' in (item.answer as object)
+          ? item.answer
+          : { value: item.answer };
+      await this.prisma.sessionResponse.upsert({
+        where: { sessionId_questionId: { sessionId, questionId: item.questionId } },
+        create: {
+          sessionId,
+          questionId: item.questionId,
+          answer: answer as never,
+          timeSpentSeconds: item.timeSpentSeconds ?? 0,
+          markedForReview: item.markedForReview ?? false,
+          answeredAt: new Date(),
+        },
+        update: {
+          answer: answer as never,
+          timeSpentSeconds: item.timeSpentSeconds ?? 0,
+          markedForReview: item.markedForReview ?? false,
+          answeredAt: new Date(),
+        },
+      });
+    }
+  }
+
+  async submitSession(
+    sessionId: string,
+    userId: string,
+    pendingAnswers?: {
+      questionId: string;
+      answer: unknown;
+      timeSpentSeconds?: number;
+      markedForReview?: boolean;
+    }[],
+    options?: { auto?: boolean },
+  ) {
     const { session } = await this.assertSessionOwner(sessionId, userId);
     if (session.status === 'SUBMITTED' || session.status === 'AUTO_SUBMITTED') {
+      const result = await this.prisma.examResult.findUnique({ where: { sessionId } });
+      if (result) return { session, result };
       throw new BadRequestException('Already submitted');
+    }
+
+    // Persist any client-side answers before closing the session (critical for time-up)
+    if (pendingAnswers?.length) {
+      await this.persistPendingAnswers(sessionId, pendingAnswers);
     }
 
     const updated = await this.prisma.examSession.update({
       where: { id: sessionId },
-      data: { status: 'SUBMITTED', submittedAt: new Date(), timeRemainingSeconds: 0 },
+      data: {
+        status: options?.auto ? 'AUTO_SUBMITTED' : 'SUBMITTED',
+        submittedAt: new Date(),
+        timeRemainingSeconds: 0,
+      },
     });
 
     const result = await this.resultsService.evaluateSession(sessionId);
     return { session: updated, result };
   }
 
-  async heartbeat(sessionId: string, userId: string) {
+  async heartbeat(
+    sessionId: string,
+    userId: string,
+    pendingAnswers?: {
+      questionId: string;
+      answer: unknown;
+      timeSpentSeconds?: number;
+      markedForReview?: boolean;
+    }[],
+  ) {
     const candidateId = await resolveCandidateId(this.prisma, userId);
     const session = await this.prisma.examSession.findUnique({
       where: { id: sessionId },
@@ -253,7 +318,18 @@ export class ExamEngineService {
       throw new ForbiddenException('Session does not belong to this candidate');
     }
     if (session.status !== 'IN_PROGRESS') {
-      return { alive: false, autoSubmitted: false };
+      const result = await this.prisma.examResult.findUnique({ where: { sessionId } });
+      return {
+        alive: false,
+        autoSubmitted: session.status === 'AUTO_SUBMITTED' || session.status === 'SUBMITTED',
+        timeRemainingSeconds: 0,
+        result: result ?? undefined,
+      };
+    }
+
+    // Keep DB in sync with latest client answers during the exam
+    if (pendingAnswers?.length) {
+      await this.persistPendingAnswers(sessionId, pendingAnswers);
     }
 
     const durationMinutes = this.getDurationMinutes(session.exam?.settings);
@@ -264,11 +340,7 @@ export class ExamEngineService {
     });
 
     if (timeRemaining <= 0) {
-      if (session.status === 'IN_PROGRESS') {
-        const { result } = await this.submitSession(sessionId, userId);
-        return { alive: false, autoSubmitted: true, timeRemainingSeconds: 0, result };
-      }
-      const result = await this.prisma.examResult.findUnique({ where: { sessionId } });
+      const { result } = await this.submitSession(sessionId, userId, pendingAnswers, { auto: true });
       return { alive: false, autoSubmitted: true, timeRemainingSeconds: 0, result };
     }
 

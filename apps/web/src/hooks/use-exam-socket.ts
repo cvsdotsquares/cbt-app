@@ -12,6 +12,13 @@ type SaveAnswerPayload = {
   markedForReview?: boolean;
 };
 
+type PendingAnswer = {
+  questionId: string;
+  answer: unknown;
+  timeSpentSeconds?: number;
+  markedForReview?: boolean;
+};
+
 type HeartbeatResult = {
   timeRemainingSeconds: number;
   autoSubmitted: boolean;
@@ -68,16 +75,20 @@ export function useExamSocket(sessionId: string | null, enabled: boolean) {
     [],
   );
 
-  const heartbeat = useCallback(async (sid: string) => {
+  const heartbeat = useCallback(async (sid: string, answers?: PendingAnswer[]) => {
     const socket = socketRef.current;
     if (!socket?.connected) throw new Error('Exam socket not connected');
-    return emitAck<HeartbeatResult>(socket, 'exam:heartbeat', { sessionId: sid });
+    return emitAck<HeartbeatResult>(socket, 'exam:heartbeat', { sessionId: sid, answers });
   }, []);
 
-  const submit = useCallback(async (sid: string) => {
+  const submit = useCallback(async (sid: string, answers?: PendingAnswer[]) => {
     const socket = socketRef.current;
     if (!socket?.connected) throw new Error('Exam socket not connected');
-    return emitAck<{ sessionId: string; submittedAt: string }>(socket, 'exam:submit', { sessionId: sid });
+    return emitAck<{ sessionId: string; submittedAt: string; result?: HeartbeatResult['result'] }>(
+      socket,
+      'exam:submit',
+      { sessionId: sid, answers },
+    );
   }, []);
 
   return useMemo(

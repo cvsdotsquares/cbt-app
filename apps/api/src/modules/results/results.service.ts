@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { parsePage, parseLimit } from '../../common/utils/pagination.util';
+import { LearningService } from '../learning/learning.service';
 
 @Injectable()
 export class ResultsService {
   private readonly subjectiveTypes = ['SUBJECTIVE', 'CASE_STUDY', 'CODING', 'AUDIO', 'VIDEO'];
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private learningService: LearningService,
+  ) {}
 
   /** Teachers may only manage results for exams they created. */
   async assertTeacherOwnsExam(examId: string, teacherUserId: string) {
@@ -83,6 +87,11 @@ export class ResultsService {
         where: { id: response.id },
         data: { isCorrect, marksAwarded: marks },
       });
+
+      // Fire-and-forget mastery update — never block scoring on analytics failure
+      this.learningService
+        .recordAnswerMastery(session.candidateId, response.questionId, isCorrect)
+        .catch(() => undefined);
     }
 
     const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;

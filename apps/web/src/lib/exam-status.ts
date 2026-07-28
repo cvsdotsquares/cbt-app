@@ -5,7 +5,7 @@ type ExamRegistration = {
 
 export type ExamStatusInfo = {
   label: string;
-  variant: 'success' | 'warning' | 'destructive' | 'outline' | 'secondary';
+  variant: 'default' | 'success' | 'warning' | 'destructive' | 'outline' | 'secondary';
   actionLabel: string;
   actionDisabled: boolean;
   phase: 'upcoming' | 'available' | 'in_progress' | 'submitted' | 'ended' | 'unavailable';
@@ -36,7 +36,7 @@ export function getExamStatus(reg: ExamRegistration): ExamStatusInfo {
   if (!['PUBLISHED', 'IN_PROGRESS'].includes(reg.exam.status)) {
     return { label: 'Not Published', variant: 'secondary', actionLabel: 'Not Published', actionDisabled: true, phase: 'unavailable' };
   }
-  return { label: 'Available Now', variant: 'success', actionLabel: 'Start Exam', actionDisabled: false, phase: 'available' };
+  return { label: 'Available Now', variant: 'default', actionLabel: 'Start Exam', actionDisabled: false, phase: 'available' };
 }
 
 export function formatCountdown(targetMs: number): string {

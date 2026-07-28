@@ -104,6 +104,7 @@ export type ExamListItem = {
   startTime: string;
   endTime: string;
   timezone?: string;
+  settings?: { durationMinutes?: number; [key: string]: unknown };
   sections?: { id: string; _count?: { questions: number } }[];
   aiTestConfig?: {
     batch?: {
@@ -368,7 +369,12 @@ export const examsApi = {
     apiFetch(`/exams/${examId}/questions/${questionId}`, { method: 'DELETE', ...authHeaders(token) }),
   remove: (token: string, id: string) =>
     apiFetch(`/exams/${id}`, { method: 'DELETE', ...authHeaders(token) }),
-  updateSchedule: (token: string, id: string, body: { startTime: string; endTime: string; timezone?: string }) =>
+  updateSchedule: (token: string, id: string, body: {
+    startTime: string;
+    endTime: string;
+    timezone?: string;
+    durationMinutes?: number;
+  }) =>
     apiFetch(`/exams/${id}/schedule`, {
       method: 'PATCH',
       body: JSON.stringify(body),
@@ -545,10 +551,40 @@ export const examSessionApi = {
       body: JSON.stringify({ questionId, marked }),
       ...authHeaders(token),
     }),
-  submit: (token: string, sessionId: string) =>
-    apiFetch(`/exam-sessions/${sessionId}/submit`, { method: 'POST', ...authHeaders(token) }),
-  heartbeat: (token: string, sessionId: string) =>
-    apiFetch(`/exam-sessions/${sessionId}/heartbeat`, { method: 'POST', ...authHeaders(token) }),
+  submit: (
+    token: string,
+    sessionId: string,
+    body?: {
+      answers?: {
+        questionId: string;
+        answer: unknown;
+        timeSpentSeconds?: number;
+        markedForReview?: boolean;
+      }[];
+    },
+  ) =>
+    apiFetch(`/exam-sessions/${sessionId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+      ...authHeaders(token),
+    }),
+  heartbeat: (
+    token: string,
+    sessionId: string,
+    body?: {
+      answers?: {
+        questionId: string;
+        answer: unknown;
+        timeSpentSeconds?: number;
+        markedForReview?: boolean;
+      }[];
+    },
+  ) =>
+    apiFetch(`/exam-sessions/${sessionId}/heartbeat`, {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+      ...authHeaders(token),
+    }),
 };
 
 export const proctoringApi = {

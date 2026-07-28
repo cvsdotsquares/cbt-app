@@ -263,42 +263,50 @@ export default function ResultsPage() {
   // ─── Exam selected: detail view ──────────────────────────────────────────
   return (
     <div className="space-y-8">
-      <PageHeader
-        title={selectedMeta?.title ?? 'Results'}
-        highlight={selectedMeta?.title?.split(/\s+/).slice(-2).join(' ')}
-        description={
-          selectedMeta?.aiTestConfig?.batch
-            ? `${selectedMeta.code} · ${selectedMeta.aiTestConfig.batch.academicClass.name} · ${selectedMeta.aiTestConfig.batch.name}`
-            : selectedMeta?.code ?? 'Class test results'
-        }
-        badge="Results"
-      >
-        <Button variant="outline" size="sm" onClick={() => { setSelectedExam(''); setShowGrading(false); }}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> All tests
-        </Button>
-        {can(Permission.RESULT_RANK) && (
-          <Button variant="outline" size="sm" disabled={rankMutation.isPending || resultItems.length === 0} onClick={() => rankMutation.mutate(selectedExam)}>
-            <Trophy className="mr-2 h-4 w-4" />
-            {rankMutation.isPending ? 'Calculating…' : 'Calculate ranks'}
-          </Button>
-        )}
-        {can(Permission.RESULT_EVALUATE) && (
-          <Button variant="outline" size="sm" onClick={() => setShowGrading(!showGrading)}>
-            <ClipboardCheck className="mr-2 h-4 w-4" />
-            {showGrading ? 'Score table' : `Manual grading${pendingGrading > 0 ? ` (${pendingGrading})` : ''}`}
-          </Button>
-        )}
-        {can(Permission.RESULT_READ) && (
-          <Button variant="outline" size="sm" disabled={!resultItems.length} onClick={exportCsv}>
-            <Download className="mr-2 h-4 w-4" /> Export CSV
-          </Button>
-        )}
-        {can(Permission.RESULT_PUBLISH) && (
-          <Button size="sm" disabled={publishMutation.isPending || resultItems.length === 0} onClick={() => publishMutation.mutate(selectedExam)}>
-            {publishMutation.isPending ? 'Publishing…' : 'Publish to students'}
-          </Button>
-        )}
-      </PageHeader>
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={() => { setSelectedExam(''); setShowGrading(false); }}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to all tests
+        </button>
+
+        <PageHeader
+          title={selectedMeta?.title ?? 'Results'}
+          highlight={selectedMeta?.title?.split(/\s+/).slice(-2).join(' ')}
+          description={
+            selectedMeta?.aiTestConfig?.batch
+              ? `${selectedMeta.code} · ${selectedMeta.aiTestConfig.batch.academicClass.name} · ${selectedMeta.aiTestConfig.batch.name}`
+              : selectedMeta?.code ?? 'Class test results'
+          }
+          badge="Results"
+        >
+          {can(Permission.RESULT_RANK) && (
+            <Button variant="outline" size="sm" disabled={rankMutation.isPending || resultItems.length === 0} onClick={() => rankMutation.mutate(selectedExam)}>
+              <Trophy className="mr-2 h-4 w-4" />
+              {rankMutation.isPending ? 'Calculating…' : 'Calculate ranks'}
+            </Button>
+          )}
+          {can(Permission.RESULT_EVALUATE) && (
+            <Button variant="outline" size="sm" onClick={() => setShowGrading(!showGrading)}>
+              <ClipboardCheck className="mr-2 h-4 w-4" />
+              {showGrading ? 'Score table' : `Manual grading${pendingGrading > 0 ? ` (${pendingGrading})` : ''}`}
+            </Button>
+          )}
+          {can(Permission.RESULT_READ) && (
+            <Button variant="outline" size="sm" disabled={!resultItems.length} onClick={exportCsv}>
+              <Download className="mr-2 h-4 w-4" /> Export CSV
+            </Button>
+          )}
+          {can(Permission.RESULT_PUBLISH) && (
+            <Button size="sm" disabled={publishMutation.isPending || resultItems.length === 0} onClick={() => publishMutation.mutate(selectedExam)}>
+              {publishMutation.isPending ? 'Publishing…' : 'Publish to students'}
+            </Button>
+          )}
+        </PageHeader>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard title="Students scored" value={resultItems.length} icon={Users} accent="blue" />

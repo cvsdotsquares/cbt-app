@@ -55,7 +55,11 @@ export default function ExamStartPage() {
   const [fullscreenError, setFullscreenError] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const answersRef = useRef<Record<string, string | string[]>>({});
+  const reviewRef = useRef<Record<string, boolean>>({});
   const questionEnteredAt = useRef(Date.now());
+  const submittingRef = useRef(false);
 
   const examSocket = useExamSocket(session?.sessionId ?? null, !!session && !done);
 
@@ -100,6 +104,8 @@ export default function ExamStartPage() {
             existing[r.questionId] = val as string | string[];
           }
         });
+        answersRef.current = existing;
+        reviewRef.current = reviewState;
         setAnswers(existing);
         setReview(reviewState);
         setSecurityReady(true);
@@ -112,20 +118,40 @@ export default function ExamStartPage() {
     questionEnteredAt.current = Date.now();
   }, [currentIndex]);
 
+  useEffect(() => {
+    reviewRef.current = review;
+  }, [review]);
+
   const getTimeSpentSeconds = () =>
     Math.max(1, Math.floor((Date.now() - questionEnteredAt.current) / 1000));
 
-  const saveAnswer = useCallback(async (questionId: string, value: string | string[]) => {
+  const buildPendingAnswers = useCallback(() => (
+    Object.entries(answersRef.current)
+      .filter(([, value]) => {
+        if (value == null || value === '') return false;
+        if (Array.isArray(value) && value.length === 0) return false;
+        return true;
+      })
+      .map(([questionId, value]) => ({
+        questionId,
+        answer: { value },
+        timeSpentSeconds: getTimeSpentSeconds(),
+        markedForReview: reviewRef.current[questionId] || false,
+      }))
+  ), []);
+
+  const persistAnswerNow = useCallback(async (
+    questionId: string,
+    value: string | string[],
+  ) => {
     if (!session || !accessToken) return;
-    setAnswers((prev) => ({ ...prev, [questionId]: value }));
-    setSaveStatus('saving');
     const timeSpentSeconds = getTimeSpentSeconds();
     const payload = {
       sessionId: session.sessionId,
       questionId,
       answer: { value },
       timeSpentSeconds,
-      markedForReview: review[questionId] || false,
+      markedForReview: reviewRef.current[questionId] || false,
     };
     try {
       if (examSocket.connected) {
@@ -135,7 +161,7 @@ export default function ExamStartPage() {
           questionId,
           answer: { value },
           timeSpentSeconds,
-          markedForReview: review[questionId] || false,
+          markedForReview: reviewRef.current[questionId] || false,
         });
       }
       setSaveStatus('saved');
@@ -147,7 +173,7 @@ export default function ExamStartPage() {
           questionId,
           answer: { value },
           timeSpentSeconds,
-          markedForReview: review[questionId] || false,
+          markedForReview: reviewRef.current[questionId] || false,
         });
         setSaveStatus('saved');
         if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current);
@@ -156,7 +182,21 @@ export default function ExamStartPage() {
         setSaveStatus('error');
       }
     }
-  }, [session, accessToken, review, examSocket]);
+  }, [session, accessToken, examSocket]);
+
+  const saveAnswer = useCallback((questionId: string, value: string | string[]) => {
+    if (!session || !accessToken) return;
+    const next = { ...answersRef.current, [questionId]: value };
+    answersRef.current = next;
+    setAnswers(next);
+    setSaveStatus('saving');
+
+    // Debounce network writes (esp. typed answers); submit/heartbeat always flush answersRef
+    if (persistTimers.current[questionId]) clearTimeout(persistTimers.current[questionId]);
+    persistTimers.current[questionId] = setTimeout(() => {
+      void persistAnswerNow(questionId, value);
+    }, 350);
+  }, [session, accessToken, persistAnswerNow]);
 
   const finishExam = useCallback((result: { totalScore: number; maxScore: number; percentage: number }) => {
     setResult(result);
@@ -165,33 +205,44 @@ export default function ExamStartPage() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!session || !accessToken || submitting) return;
+    if (!session || !accessToken || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setShowSubmitDialog(false);
+
+    // Flush any debounced per-question timers before final submit
+    Object.values(persistTimers.current).forEach((t) => clearTimeout(t));
+    persistTimers.current = {};
+
+    const answers = buildPendingAnswers();
     try {
-      const res = await examSessionApi.submit(accessToken, session.sessionId) as { result: { totalScore: number; maxScore: number; percentage: number } };
+      const res = await examSessionApi.submit(accessToken, session.sessionId, { answers }) as {
+        result: { totalScore: number; maxScore: number; percentage: number };
+      };
       finishExam(res.result);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Submit failed');
-    } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [session, accessToken, submitting, finishExam]);
+  }, [session, accessToken, finishExam, buildPendingAnswers]);
 
   useEffect(() => {
     if (!session || done) return;
     const interval = setInterval(async () => {
-      if (!accessToken) return;
+      if (!accessToken || submittingRef.current) return;
+      const answers = buildPendingAnswers();
       try {
         const hb = examSocket.connected
-          ? await examSocket.heartbeat(session.sessionId)
-          : await examSessionApi.heartbeat(accessToken, session.sessionId) as {
+          ? await examSocket.heartbeat(session.sessionId, answers)
+          : await examSessionApi.heartbeat(accessToken, session.sessionId, { answers }) as {
               timeRemainingSeconds: number;
               autoSubmitted: boolean;
               result?: { totalScore: number; maxScore: number; percentage: number };
             };
         setTimeLeft(hb.timeRemainingSeconds);
         if (hb.autoSubmitted && hb.result) {
+          submittingRef.current = true;
           finishExam(hb.result);
         }
       } catch {
@@ -199,24 +250,20 @@ export default function ExamStartPage() {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [session, accessToken, done, finishExam, examSocket]);
+  }, [session, accessToken, done, finishExam, examSocket, buildPendingAnswers]);
 
   useEffect(() => {
     if (done || !session) return;
     const timer = setInterval(() => {
-      setTimeLeft((t) => {
-        const next = Math.max(0, t - 1);
-        return next;
-      });
+      setTimeLeft((t) => Math.max(0, t - 1));
     }, 1000);
     return () => clearInterval(timer);
   }, [session, done]);
 
   useEffect(() => {
-    if (done || !session || !accessToken || timeLeft > 0) return;
-    handleSubmit();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, done, session, accessToken]);
+    if (done || !session || !accessToken || timeLeft > 0 || submittingRef.current) return;
+    void handleSubmit();
+  }, [timeLeft, done, session, accessToken, handleSubmit]);
 
   if (!ready) return <div className="flex min-h-screen items-center justify-center">Loading...</div>;
   if (error) return (

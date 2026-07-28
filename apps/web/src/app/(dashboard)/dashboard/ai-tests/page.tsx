@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,12 +16,25 @@ import { AiTestQuestionsReview } from '@/components/admin/ai-test-questions-revi
 import { cn } from '@/lib/utils';
 import {
   Sparkles, BookOpen, Layers, Clock, Hash, Shield, Loader2,
-  CheckCircle2, ArrowRight, GraduationCap, FileText,
+  CheckCircle2, ArrowRight, GraduationCap, FileText, Check,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { isTeacherOnly, normalizeRoles } from '@/lib/roles';
 
 type TestMode = 'single' | 'all';
+
+type SyllabusChapter = {
+  id: string;
+  number: number;
+  title: string;
+  status: string;
+  topics?: { id: string; title: string; status?: string }[];
+};
+
+type SyllabusSubject = {
+  subject: { id: string; name: string };
+  chapters: SyllabusChapter[];
+};
 
 const STEPS = [
   { id: 1, label: 'Configure' },
@@ -38,6 +51,10 @@ const DIFFICULTY_OPTIONS = [
 const selectClass =
   'mt-1.5 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
+function isDoneStatus(status: string) {
+  return status === 'COMPLETED';
+}
+
 export default function AiTestsPage() {
   const { accessToken } = useRequireAuth(true);
   const { user } = useAuthStore();
@@ -50,9 +67,10 @@ export default function AiTestsPage() {
   const [mode, setMode] = useState<TestMode>(teacherPortal ? 'single' : 'all');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [form, setForm] = useState({
-    title: 'Weekly Assessment',
+    title: '',
     subjectId: '',
     batchId: '',
+    chapterIds: [] as string[],
     questionCount: 10,
     questionsPerSubject: 5,
     difficulty: 'MEDIUM',
@@ -110,12 +128,34 @@ export default function AiTestsPage() {
   const selectedSubject = classSubjects.find((s) => s.id === form.subjectId)
     ?? subjects.find((s) => s.id === form.subjectId);
 
+  const singleSubjectMode = mode === 'single' || teacherPortal;
+
+  const { data: syllabusProgress, isLoading: syllabusLoading } = useQuery({
+    queryKey: ['syllabus-progress', form.batchId, form.subjectId],
+    queryFn: () =>
+      batchesApi.getSyllabusProgress(accessToken!, form.batchId, form.subjectId) as Promise<SyllabusSubject[]>,
+    enabled: !!accessToken && singleSubjectMode && !!form.batchId && !!form.subjectId,
+  });
+
+  const doneChapters = useMemo(() => {
+    const subjectEntry = (syllabusProgress ?? []).find((s) => s.subject.id === form.subjectId);
+    return (subjectEntry?.chapters ?? []).filter((ch) => isDoneStatus(ch.status));
+  }, [syllabusProgress, form.subjectId]);
+
+  const doneChapterIdsKey = doneChapters.map((c) => c.id).join(',');
+
   useEffect(() => {
     if (!teacherPortal || !form.batchId || form.subjectId) return;
     if (teacherSubjects.length === 1) {
-      setForm((f) => ({ ...f, subjectId: teacherSubjects[0].id }));
+      setForm((f) => ({ ...f, subjectId: teacherSubjects[0].id, chapterIds: [] }));
     }
   }, [teacherPortal, form.batchId, form.subjectId, teacherSubjects]);
+
+  // When subject/batch changes and done chapters load, default-select all of them
+  useEffect(() => {
+    if (!singleSubjectMode || !form.subjectId || syllabusLoading) return;
+    setForm((f) => ({ ...f, chapterIds: doneChapterIdsKey ? doneChapterIdsKey.split(',') : [] }));
+  }, [singleSubjectMode, form.batchId, form.subjectId, syllabusLoading, doneChapterIdsKey]);
 
   const estimatedQuestions = useMemo(() => {
     if (mode === 'all') {
@@ -123,6 +163,43 @@ export default function AiTestsPage() {
     }
     return form.questionCount;
   }, [mode, classSubjects.length, form.questionsPerSubject, form.questionCount]);
+
+  const toggleChapter = (chapterId: string) => {
+    setForm((f) => ({
+      ...f,
+      chapterIds: f.chapterIds.includes(chapterId)
+        ? f.chapterIds.filter((id) => id !== chapterId)
+        : [...f.chapterIds, chapterId],
+    }));
+  };
+
+  const selectAllChapters = () => {
+    setForm((f) => ({ ...f, chapterIds: doneChapters.map((c) => c.id) }));
+  };
+
+  const clearChapters = () => {
+    setForm((f) => ({ ...f, chapterIds: [] }));
+  };
+
+  const chapterListRef = useRef<HTMLDivElement>(null);
+  const [chapterScroll, setChapterScroll] = useState({ canUp: false, canDown: false });
+
+  const updateChapterScrollHints = () => {
+    const el = chapterListRef.current;
+    if (!el) {
+      setChapterScroll({ canUp: false, canDown: false });
+      return;
+    }
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    setChapterScroll({
+      canUp: scrollTop > 4,
+      canDown: scrollTop + clientHeight < scrollHeight - 4,
+    });
+  };
+
+  useEffect(() => {
+    updateChapterScrollHints();
+  }, [doneChapters.length, syllabusLoading, form.subjectId]);
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -147,10 +224,13 @@ export default function AiTestsPage() {
         });
       }
 
+      const hasChapterSelection = form.chapterIds.length > 0;
       return aiApi.createAiTest(accessToken!, {
         ...base,
         subjectId: form.subjectId,
         questionCount: form.questionCount,
+        chapterIds: hasChapterSelection ? form.chapterIds : undefined,
+        syllabusScope: hasChapterSelection ? 'SELECTED' : 'COMPLETED_ONLY',
       });
     },
     onSuccess: (data) => {
@@ -177,7 +257,12 @@ export default function AiTestsPage() {
     onError: (e: Error) => toast({ title: 'Could not create test', description: e.message, variant: 'destructive' }),
   });
 
-  const canCreate = form.batchId && (mode === 'all' || form.subjectId) && !createdExam;
+  const canCreate =
+    !!form.title.trim()
+    && form.batchId
+    && (mode === 'all' || !!form.subjectId)
+    && (!singleSubjectMode || form.chapterIds.length > 0)
+    && !createdExam;
   const activeStep = createdExam ? 3 : createMutation.isPending ? 2 : 1;
 
   if (createdExam && accessToken) {
@@ -256,7 +341,11 @@ export default function AiTestsPage() {
                     placeholder={mode === 'all' ? 'e.g. Weekly Test — All Subjects' : 'e.g. Social Science Unit Test'}
                     value={form.title}
                     onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    required
                   />
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Must be unique — cannot reuse an existing test name.
+                  </p>
                 </div>
 
                 <div>
@@ -265,7 +354,7 @@ export default function AiTestsPage() {
                     id="batch"
                     className={selectClass}
                     value={form.batchId}
-                    onChange={(e) => setForm({ ...form, batchId: e.target.value, subjectId: '' })}
+                    onChange={(e) => setForm({ ...form, batchId: e.target.value, subjectId: '', chapterIds: [] })}
                   >
                     <option value="">Choose batch</option>
                     {(batches ?? []).map((b) => (
@@ -288,13 +377,152 @@ export default function AiTestsPage() {
                       id="subject"
                       className={selectClass}
                       value={form.subjectId}
-                      onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
+                      onChange={(e) => setForm({ ...form, subjectId: e.target.value, chapterIds: [] })}
                     >
                       <option value="">Choose subject</option>
                       {(classSubjects.length ? classSubjects : subjects).map((s) => (
                         <option key={s.id} value={s.id}>Class {s.classLevel} — {s.name}</option>
                       ))}
                     </select>
+                  </div>
+                )}
+
+                {singleSubjectMode && form.batchId && form.subjectId && (
+                  <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
+                    <div className="flex items-start justify-between gap-3 border-b border-border/60 bg-muted/30 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4 shrink-0 text-primary" />
+                          <Label className="text-sm font-semibold">Done chapters</Label>
+                          {!syllabusLoading && doneChapters.length > 0 && (
+                            <Badge variant="secondary" className="font-normal tabular-nums">
+                              {form.chapterIds.length}/{doneChapters.length}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          Select the chapters this test should draw questions from.
+                        </p>
+                      </div>
+                      {doneChapters.length > 0 && (
+                        <div className="flex shrink-0 gap-1 rounded-lg border border-border/60 bg-background p-0.5 shadow-sm">
+                          <button
+                            type="button"
+                            onClick={selectAllChapters}
+                            disabled={form.chapterIds.length === doneChapters.length}
+                            className="rounded-md px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+                          >
+                            All
+                          </button>
+                          <button
+                            type="button"
+                            onClick={clearChapters}
+                            disabled={form.chapterIds.length === 0}
+                            className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                          >
+                            None
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {doneChapters.length > 0 && (
+                      <div className="h-1 bg-muted">
+                        <div
+                          className="h-full bg-primary transition-all duration-300 ease-out"
+                          style={{
+                            width: `${Math.round((form.chapterIds.length / doneChapters.length) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    <div className="relative">
+                      {chapterScroll.canUp && (
+                        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-card to-transparent" />
+                      )}
+                      <div
+                        ref={chapterListRef}
+                        onScroll={updateChapterScrollHints}
+                        className="max-h-72 overflow-y-auto overscroll-contain scroll-smooth [scrollbar-gutter:stable]"
+                      >
+                        {syllabusLoading ? (
+                          <div className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading chapters…
+                          </div>
+                        ) : doneChapters.length === 0 ? (
+                          <div className="px-4 py-8 text-center">
+                            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                              <BookOpen className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                            <p className="text-sm font-medium">No done chapters yet</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Mark chapters as Done on{' '}
+                              <Link href="/dashboard/batches" className="font-medium text-primary underline-offset-2 hover:underline">
+                                Classes &amp; Batches
+                              </Link>{' '}
+                              to include them here.
+                            </p>
+                          </div>
+                        ) : (
+                          <ul className="divide-y divide-border/50">
+                            {doneChapters.map((ch) => {
+                              const checked = form.chapterIds.includes(ch.id);
+                              return (
+                                <li key={ch.id}>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleChapter(ch.id)}
+                                    className={cn(
+                                      'flex w-full items-center gap-3 px-4 py-3 text-left transition-colors',
+                                      checked ? 'bg-primary/[0.04]' : 'hover:bg-muted/40',
+                                    )}
+                                  >
+                                    <span
+                                      className={cn(
+                                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors',
+                                        checked
+                                          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                          : 'border-border/80 bg-background',
+                                      )}
+                                      aria-hidden
+                                    >
+                                      {checked && <Check className="h-3.5 w-3.5" strokeWidth={2.75} />}
+                                    </span>
+                                    <span className="flex h-7 w-10 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">
+                                      {ch.number}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className={cn('block truncate text-sm font-medium', checked ? 'text-foreground' : 'text-foreground/90')}>
+                                        {ch.title}
+                                      </span>
+                                      <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                                        Chapter {ch.number}
+                                      </span>
+                                    </span>
+                                    {checked && (
+                                      <Badge variant="secondary" className="shrink-0 text-[10px] font-medium uppercase tracking-wide">
+                                        Included
+                                      </Badge>
+                                    )}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                      {chapterScroll.canDown && (
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-card to-transparent" />
+                      )}
+                    </div>
+
+                    {(chapterScroll.canDown || chapterScroll.canUp) && (
+                      <div className="border-t border-border/60 bg-muted/20 px-4 py-2 text-center text-[11px] text-muted-foreground">
+                        Scroll to see all {doneChapters.length} done chapters
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -484,6 +712,23 @@ export default function AiTestsPage() {
                 </div>
               )}
 
+              {singleSubjectMode && form.chapterIds.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Chapters ({form.chapterIds.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {doneChapters
+                      .filter((ch) => form.chapterIds.includes(ch.id))
+                      .map((ch) => (
+                        <Badge key={ch.id} variant="secondary" className="text-xs font-normal">
+                          Ch.{ch.number}
+                        </Badge>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               <div className="border-t pt-4">
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Checklist
@@ -491,6 +736,16 @@ export default function AiTestsPage() {
                 <ul className="space-y-2">
                   <ChecklistItem done={!!form.batchId} label="Batch selected" />
                   <ChecklistItem done={mode === 'all' || !!form.subjectId} label="Subject configured" />
+                  <ChecklistItem
+                    done={!singleSubjectMode || form.chapterIds.length > 0}
+                    label={
+                      singleSubjectMode
+                        ? form.chapterIds.length > 0
+                          ? `${form.chapterIds.length} chapter${form.chapterIds.length === 1 ? '' : 's'} selected`
+                          : 'Chapters selected'
+                        : 'Chapters selected'
+                    }
+                  />
                   <ChecklistItem done={!!form.title.trim()} label="Test name set" />
                   <ChecklistItem
                     done={mode === 'all' ? classSubjects.length > 0 : !!form.subjectId}
