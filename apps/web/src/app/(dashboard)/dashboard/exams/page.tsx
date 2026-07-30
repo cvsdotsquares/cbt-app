@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   DEFAULT_EXAM_TIMEZONE,
+  DEFAULT_PAST_START_GRACE_MINUTES,
   localDateTimeToUtcIso,
   nowLocalDateTimeInput,
   parseExamDateTime,
@@ -107,7 +108,8 @@ export default function ExamsPage() {
     if (!scheduleForm.startTime) return false;
     try {
       const start = parseExamDateTime(scheduleForm.startTime, scheduleForm.timezone);
-      return start.getTime() < Date.now();
+      const graceMs = DEFAULT_PAST_START_GRACE_MINUTES * 60_000;
+      return start.getTime() < Date.now() - graceMs;
     } catch {
       return false;
     }

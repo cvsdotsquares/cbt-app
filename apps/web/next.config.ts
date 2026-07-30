@@ -5,7 +5,7 @@ import { loadEnvConfig } from '@next/env';
 // Share JWT_ACCESS_SECRET (and API_PROXY_URL) from the API package in monorepo dev.
 loadEnvConfig(path.join(__dirname, '..', 'api'));
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   transpilePackages: ['@cbt/shared'],
   eslint: { ignoreDuringBuilds: false },
   typescript: { ignoreBuildErrors: false },
@@ -19,6 +19,6 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '**.amazonaws.com' },
     ],
   },
-};
+} as NextConfig;
 
 export default nextConfig;

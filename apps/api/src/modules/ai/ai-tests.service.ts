@@ -681,22 +681,25 @@ Vary the correct option across questions — do not always use "a".`;
     }
 
     const now = new Date();
-    const end = new Date(now.getTime() + (config.durationMinutes ?? 60) * 60 * 1000);
+    const durationMinutes = config.durationMinutes ?? 60;
+    const start = new Date(now.getTime() + 60_000);
+    const end = new Date(start.getTime() + durationMinutes * 60_000);
     const code = `AI-${Date.now().toString(36).toUpperCase()}`;
 
     const exam = await this.examsService.create(tenantId, userId, {
       title: config.title,
       code,
       type: 'AI_ASSESSMENT',
-      startTime: now.toISOString(),
+      // Draft placeholder window — slightly ahead so past-start validation can't race `new Date()`.
+      startTime: start.toISOString(),
       endTime: end.toISOString(),
-      settings: this.aiExamSettings(config.durationMinutes ?? 60, {
+      settings: this.aiExamSettings(durationMinutes, {
         aiGenerated: true,
         subjectId: config.subjectId,
         chapterIds: config.chapterIds,
       }),
       securityPolicy: { proctoringEnabled: false, fullscreen: true, blockCopyPaste: true, blockRightClick: true },
-      sections: [{ name: 'Section A', orderIndex: 0, durationMinutes: config.durationMinutes ?? 60 }],
+      sections: [{ name: 'Section A', orderIndex: 0, durationMinutes }],
     });
 
     const section = exam.sections[0];
@@ -794,14 +797,15 @@ Vary the correct option across questions — do not always use "a".`;
 
     const now = new Date();
     const duration = config.durationMinutes ?? 90;
-    const end = new Date(now.getTime() + duration * 60 * 1000);
+    const start = new Date(now.getTime() + 60_000);
+    const end = new Date(start.getTime() + duration * 60_000);
     const code = `AI-ALL-${Date.now().toString(36).toUpperCase()}`;
 
     const exam = await this.examsService.create(tenantId, userId, {
       title: config.title,
       code,
       type: 'AI_ASSESSMENT',
-      startTime: now.toISOString(),
+      startTime: start.toISOString(),
       endTime: end.toISOString(),
       settings: this.aiExamSettings(duration, {
         aiGenerated: true,

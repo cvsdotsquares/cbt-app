@@ -72,10 +72,13 @@ export type ExamScheduleValidation =
   | { ok: true }
   | { ok: false; message: string };
 
+/** Default grace for past-start checks (datetime-local is minute-precision; AI create races `new Date()`). */
+export const DEFAULT_PAST_START_GRACE_MINUTES = 2;
+
 export type ValidateExamScheduleOptions = {
   /** When true, start time must not be in the past. */
   disallowPastStart?: boolean;
-  /** Grace period in minutes before "now" (default 0). */
+  /** Grace period in minutes before "now" (default {@link DEFAULT_PAST_START_GRACE_MINUTES}). */
   pastGraceMinutes?: number;
   now?: Date;
 };
@@ -104,7 +107,8 @@ export function validateExamSchedule(
   }
   if (options?.disallowPastStart) {
     const now = options.now ?? new Date();
-    const graceMs = Math.max(0, options.pastGraceMinutes ?? 0) * 60_000;
+    const graceMinutes = options.pastGraceMinutes ?? DEFAULT_PAST_START_GRACE_MINUTES;
+    const graceMs = Math.max(0, graceMinutes) * 60_000;
     if (start.getTime() < now.getTime() - graceMs) {
       return {
         ok: false,

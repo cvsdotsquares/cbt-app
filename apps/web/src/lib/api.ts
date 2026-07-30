@@ -697,7 +697,8 @@ export const materialsApi = {
       'X-Tenant-ID': getAuthTenantId(),
       'X-Device-Fingerprint': getFingerprint(),
     };
-    const requestUrl = `${getApiUrl()}/materials/upload`;
+    const directApi = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || '/api/v1';
+    const requestUrl = `${directApi}/materials/upload`;
     const useColdStartRetry = typeof window !== 'undefined' && !isLocalDevHost();
 
     let res = useColdStartRetry
