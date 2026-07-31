@@ -47,3 +47,8 @@ infra/docker/volumes/
 .cache/
 uploads/
 temp/
+
+# Uploads
+*.tar.gz
+*.bak
+_tmp-*

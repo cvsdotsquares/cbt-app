@@ -13,13 +13,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveTenantCached } from '../../common/utils/tenant-cache';
 import { MfaService } from './mfa.service';
-import { MailService } from '../mail/mail.service';
 import {
   LoginDto,
   RegisterDto,
   MfaVerifyDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
 } from './dto/auth.dto';
 import { Role, getPermissionsForRoles, JwtPayload } from '@cbt/shared';
 
@@ -34,64 +31,7 @@ export class AuthService {
     private jwt: JwtService,
     private config: ConfigService,
     private mfa: MfaService,
-    private mail: MailService,
   ) {}
-
-  async forgotPassword(dto: ForgotPasswordDto) {
-    const tenant = await this.resolveTenant(dto.tenantId);
-    if (!tenant) {
-      return { message: 'If the email exists, a reset link has been sent' };
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { tenantId_email: { tenantId: tenant.id, email: dto.email } },
-    });
-
-    if (user) {
-      const rawToken = uuidv4();
-      const tokenHash = this.hashToken(rawToken);
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-
-      await this.prisma.passwordResetToken.create({
-        data: { userId: user.id, tokenHash, expiresAt },
-      });
-
-      const appUrl = this.config.get('APP_URL', 'http://localhost:3002');
-      const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;
-      await this.mail.sendPasswordReset(user.email, resetUrl, user.firstName);
-    }
-
-    return { message: 'If the email exists, a reset link has been sent' };
-  }
-
-  async resetPassword(dto: ResetPasswordDto) {
-    const tokenHash = this.hashToken(dto.token);
-    const record = await this.prisma.passwordResetToken.findFirst({
-      where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } },
-      include: { user: true },
-    });
-
-    if (!record) throw new BadRequestException('Invalid or expired reset token');
-
-    const passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
-
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: record.userId },
-        data: { passwordHash, failedAttempts: 0, lockedUntil: null },
-      }),
-      this.prisma.passwordResetToken.update({
-        where: { id: record.id },
-        data: { usedAt: new Date() },
-      }),
-      this.prisma.session.updateMany({
-        where: { userId: record.userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      }),
-    ]);
-
-    return { message: 'Password reset successful. Please log in with your new password.' };
-  }
 
   private isPublicRegistrationAllowed(): boolean {
     const explicit = this.config.get<string>('ALLOW_PUBLIC_REGISTRATION');

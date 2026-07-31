@@ -18,7 +18,7 @@ import { TableSkeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
   Download, ClipboardCheck, Award, Users, BarChart3, CheckCircle2,
-  GraduationCap, ArrowLeft, Trophy, FileSpreadsheet, Sparkles,
+  GraduationCap, ArrowLeft, Trophy, FileSpreadsheet, Sparkles, Eye,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -27,6 +27,7 @@ import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/auth-store';
 import { isTeacherOnly, normalizeRoles } from '@/lib/roles';
+import { AnswerReviewDialog } from '@/components/results/answer-review-dialog';
 
 function questionCount(exam: ExamListItem) {
   return (exam.sections || []).reduce((sum, s) => sum + (s._count?.questions ?? 0), 0);
@@ -42,6 +43,7 @@ export default function ResultsPage() {
   const [showGrading, setShowGrading] = useState(false);
   const [gradeTarget, setGradeTarget] = useState<SubjectiveResponseItem | null>(null);
   const [gradeMarks, setGradeMarks] = useState('');
+  const [reviewResultId, setReviewResultId] = useState<string | null>(null);
 
   const { data: exams, isLoading: examsLoading } = useQuery({
     queryKey: ['exams'],
@@ -446,6 +448,7 @@ export default function ResultsPage() {
                       <th className="px-5 py-3 font-semibold">Score</th>
                       <th className="px-5 py-3 font-semibold">Percentage</th>
                       <th className="px-5 py-3 font-semibold">Status</th>
+                      <th className="px-5 py-3 font-semibold">Answers</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -489,6 +492,12 @@ export default function ResultsPage() {
                               {r.published ? 'Published' : 'Draft'}
                             </Badge>
                           </td>
+                          <td className="px-5 py-3.5">
+                            <Button variant="outline" size="sm" onClick={() => setReviewResultId(r.id)}>
+                              <Eye className="mr-1.5 h-3.5 w-3.5" />
+                              Review
+                            </Button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -499,6 +508,15 @@ export default function ResultsPage() {
           </CardContent>
         </Card>
       )}
+
+      <AnswerReviewDialog
+        open={!!reviewResultId}
+        resultId={reviewResultId}
+        accessToken={accessToken}
+        onClose={() => setReviewResultId(null)}
+        showCandidateName
+        markedAnswerLabel="marked"
+      />
 
       <Dialog open={!!gradeTarget} onOpenChange={(open) => !open && setGradeTarget(null)}>
         <DialogContent>

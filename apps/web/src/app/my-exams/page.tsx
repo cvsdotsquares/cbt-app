@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/layout/data-table';
 import { AdmitCardDialog, type AdmitCard } from '@/components/candidate/admit-card-dialog';
 import { KycSubmitCard } from '@/components/candidate/kyc-submit-card';
 import { CertificateDialog } from '@/components/candidate/certificate-dialog';
+import { AnswerReviewDialog } from '@/components/results/answer-review-dialog';
 import type { CertificateData } from '@/lib/certificate';
 import { toast } from '@/hooks/use-toast';
 import { getExamStatus, formatCountdown } from '@/lib/exam-status';
@@ -27,7 +28,7 @@ import { useNow } from '@/hooks/use-now';
 import {
   LogOut, Play, Clock, Award, FileText, Moon, Sun, Shield, Download, IdCard,
   Search, CheckCircle2, AlertCircle, BookOpen, Wifi, Monitor, User, CircleHelp,
-  Layers, Target,
+  Layers, Target, Eye,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { TableSkeleton } from '@/components/ui/skeleton';
@@ -85,6 +86,7 @@ export default function MyExamsPage() {
   const [loadingAdmit, setLoadingAdmit] = useState<string | null>(null);
   const [certificate, setCertificate] = useState<CertificateData | null>(null);
   const [loadingCertificate, setLoadingCertificate] = useState(false);
+  const [reviewResultId, setReviewResultId] = useState<string | null>(null);
   const certificateRequestId = useRef(0);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<Tab>('exams');
@@ -484,6 +486,9 @@ export default function MyExamsPage() {
                               </p>
                               <p className="text-sm font-semibold text-muted-foreground">{r.percentage.toFixed(1)}%</p>
                             </div>
+                            <Button variant="outline" size="sm" onClick={() => setReviewResultId(r.id)}>
+                              <Eye className="mr-2 h-3.5 w-3.5" /> Answers
+                            </Button>
                             <Button variant="outline" size="sm" onClick={() => openCertificate(r.id)} disabled={loadingCertificate}>
                               <Download className="mr-2 h-3.5 w-3.5" /> Certificate
                             </Button>
@@ -909,6 +914,12 @@ export default function MyExamsPage() {
       </main>
 
       <AdmitCardDialog card={admitCard} onClose={() => setAdmitCard(null)} />
+      <AnswerReviewDialog
+        open={!!reviewResultId}
+        resultId={reviewResultId}
+        accessToken={accessToken}
+        onClose={() => setReviewResultId(null)}
+      />
       <CertificateDialog
         certificate={certificate}
         loading={loadingCertificate && !certificate}

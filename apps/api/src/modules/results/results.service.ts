@@ -1,7 +1,19 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Role, type JwtPayload } from '@cbt/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { parsePage, parseLimit } from '../../common/utils/pagination.util';
 import { LearningService } from '../learning/learning.service';
+import { isTeacherScoped } from '../../common/utils/teacher-scope.util';
+
+const RESULT_STAFF_ROLES: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ORG_ADMIN,
+  Role.INSTITUTE_ADMIN,
+  Role.EXAM_MANAGER,
+  Role.TEACHER,
+  Role.EVALUATOR,
+  Role.AUDITOR,
+];
 
 @Injectable()
 export class ResultsService {
@@ -279,6 +291,114 @@ export class ResultsService {
         totalCandidates: totalByExam[r.examId] ?? null,
       })),
     };
+  }
+
+  async getResultReview(user: JwtPayload, resultId: string) {
+    const result = await this.prisma.examResult.findUnique({
+      where: { id: resultId },
+      include: {
+        exam: { select: { id: true, title: true, code: true } },
+        candidate: {
+          include: { user: { select: { id: true, firstName: true, lastName: true } } },
+        },
+        session: { include: { responses: true } },
+      },
+    });
+    if (!result) throw new NotFoundException('Result not found');
+
+    const candidate = await this.prisma.candidate.findUnique({ where: { userId: user.sub } });
+    const isOwner = !!candidate && candidate.id === result.candidateId;
+    const isStaff = (user.roles ?? []).some((role) => RESULT_STAFF_ROLES.includes(role as Role));
+
+    if (isOwner) {
+      if (!result.published) {
+        throw new ForbiddenException('Result is not published yet');
+      }
+    } else if (!isStaff) {
+      throw new ForbiddenException('You cannot view this result');
+    } else if (isTeacherScoped(user)) {
+      await this.assertTeacherOwnsExam(result.examId, user.sub);
+    }
+
+    const examQuestions = await this.prisma.examQuestion.findMany({
+      where: { examId: result.examId },
+      include: {
+        section: { select: { name: true, orderIndex: true } },
+        question: {
+          include: { versions: { take: 1, orderBy: { versionNumber: 'desc' } } },
+        },
+      },
+      orderBy: [{ section: { orderIndex: 'asc' } }, { orderIndex: 'asc' }],
+    });
+
+    const responseByQuestion = new Map(
+      result.session.responses.map((response) => [response.questionId, response]),
+    );
+
+    const questions = examQuestions.map((eq, index) => {
+      const version = eq.question.versions[0];
+      const response = responseByQuestion.get(eq.questionId);
+      const content = (version?.content || {}) as { text?: string };
+      const options = this.normalizeOptions(version?.options);
+      const correctAnswer = this.normalizeAnswer(version?.correctAnswer);
+      const candidateAnswer = this.normalizeAnswer(response?.answer);
+
+      return {
+        number: index + 1,
+        questionId: eq.questionId,
+        type: eq.question.type,
+        title: eq.question.title ?? 'Question',
+        text: content.text?.trim() || eq.question.title || 'Question',
+        sectionName: eq.section.name,
+        options,
+        candidateAnswer,
+        candidateAnswerLabel: this.formatAnswerLabel(candidateAnswer, options),
+        correctAnswer,
+        correctAnswerLabel: this.formatAnswerLabel(correctAnswer, options),
+        isCorrect: response?.isCorrect ?? null,
+        marksAwarded: response?.marksAwarded ?? null,
+        maxMarks: version?.marks ?? eq.marks ?? 0,
+        explanation: version?.explanation ?? null,
+        answered: candidateAnswer.length > 0,
+      };
+    });
+
+    return {
+      resultId: result.id,
+      examTitle: result.exam.title,
+      examCode: result.exam.code,
+      candidateName: `${result.candidate.user.firstName} ${result.candidate.user.lastName}`,
+      totalScore: result.totalScore,
+      maxScore: result.maxScore,
+      percentage: result.percentage,
+      published: result.published,
+      questions,
+    };
+  }
+
+  private normalizeOptions(options: unknown): Record<string, string> {
+    if (!options || typeof options !== 'object') return {};
+    const raw = options as Record<string, unknown>;
+    const out: Record<string, string> = {};
+    for (const key of ['a', 'b', 'c', 'd', 'A', 'B', 'C', 'D']) {
+      const value = raw[key];
+      if (value != null && String(value).trim()) {
+        out[key.toLowerCase()] = String(value);
+      }
+    }
+    return out;
+  }
+
+  private formatAnswerLabel(keys: string[], options: Record<string, string>): string {
+    if (!keys.length) return 'Not answered';
+    return keys
+      .map((key) => {
+        const normalized = key.trim().toLowerCase();
+        const label = options[normalized];
+        if (label) return `${normalized.toUpperCase()}. ${label}`;
+        return key;
+      })
+      .join(', ');
   }
 
   async getCertificate(userId: string, resultId: string) {

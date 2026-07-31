@@ -66,24 +66,3 @@ export class RefreshTokenDto {
   refreshToken: string;
 }
 
-export class ForgotPasswordDto {
-  @ApiProperty()
-  @IsEmail()
-  email: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  tenantId?: string;
-}
-
-export class ResetPasswordDto {
-  @ApiProperty()
-  @IsString()
-  token: string;
-
-  @ApiProperty()
-  @IsString()
-  @MinLength(8)
-  newPassword: string;
-}

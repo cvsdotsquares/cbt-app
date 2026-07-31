@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ACCESS_TOKEN_COOKIE, verifyAccessToken } from '@/lib/auth-cookies';
 import { isAdmin, isTeacherOnly, normalizeRoles } from '@/lib/roles';
 
-const PUBLIC_PATHS = ['/login', '/register', '/mfa', '/forgot-password', '/reset-password', '/verify'];
+const PUBLIC_PATHS = ['/login', '/register', '/mfa', '/verify'];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

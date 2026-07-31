@@ -18,8 +18,6 @@ import {
   RegisterDto,
   MfaVerifyDto,
   RefreshTokenDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
 } from './dto/auth.dto';
 import { Public } from '../../common/decorators/permissions.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -126,23 +124,5 @@ export class AuthController {
   @ApiOperation({ summary: 'Get login history' })
   getLoginHistory(@CurrentUser('sub') userId: string) {
     return this.authService.getLoginHistory(userId);
-  }
-
-  @Public()
-  @Post('forgot-password')
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
-  @ApiOperation({ summary: 'Request password reset' })
-  forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto);
-  }
-
-  @Public()
-  @Post('reset-password')
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
-  @ApiOperation({ summary: 'Reset password with token' })
-  resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto);
   }
 }

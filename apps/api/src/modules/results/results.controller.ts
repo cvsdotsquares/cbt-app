@@ -53,6 +53,16 @@ export class ResultsController {
     return this.resultsService.getCertificate(userId, resultId);
   }
 
+  @Get('review/:resultId')
+  @RequirePermissions(Permission.RESULT_READ)
+  @ApiOperation({ summary: 'Question-level answer review for a result' })
+  getResultReview(
+    @CurrentUser() user: JwtPayload,
+    @Param('resultId') resultId: string,
+  ) {
+    return this.resultsService.getResultReview(user, resultId);
+  }
+
   @Post('evaluate/:sessionId')
   @RequirePermissions(Permission.RESULT_EVALUATE)
   async evaluate(

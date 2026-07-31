@@ -216,6 +216,37 @@ export type SubjectiveResponseItem = {
   session: { candidate: { user: { firstName: string; lastName: string; email: string } } };
 };
 
+export type ResultReviewQuestion = {
+  number: number;
+  questionId: string;
+  type: string;
+  title: string;
+  text: string;
+  sectionName: string;
+  options: Record<string, string>;
+  candidateAnswer: string[];
+  candidateAnswerLabel: string;
+  correctAnswer: string[];
+  correctAnswerLabel: string;
+  isCorrect: boolean | null;
+  marksAwarded: number | null;
+  maxMarks: number;
+  explanation: string | null;
+  answered: boolean;
+};
+
+export type ResultReview = {
+  resultId: string;
+  examTitle: string;
+  examCode: string;
+  candidateName: string;
+  totalScore: number;
+  maxScore: number;
+  percentage: number;
+  published: boolean;
+  questions: ResultReviewQuestion[];
+};
+
 export async function apiFetch<T>(endpoint: string, options: ApiOptions = {}): Promise<T> {
   const { token, skipAuth, ...fetchOptions } = options;
   const headers: Record<string, string> = {
@@ -311,18 +342,6 @@ export const authApi = {
     apiFetch('/auth/refresh', {
       method: 'POST',
       body: JSON.stringify({ refreshToken }),
-      skipAuth: true,
-    }),
-  forgotPassword: (email: string) =>
-    apiFetch('/auth/forgot-password', {
-      method: 'POST',
-      body: JSON.stringify({ email, tenantId: DEFAULT_TENANT }),
-      skipAuth: true,
-    }),
-  resetPassword: (token: string, newPassword: string) =>
-    apiFetch('/auth/reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ token, newPassword }),
       skipAuth: true,
     }),
   logout: (token: string) =>
@@ -510,6 +529,8 @@ export const resultsApi = {
     return res.blob();
   },
   my: (token: string) => apiFetch('/results/my', authHeaders(token)),
+  review: (token: string, resultId: string) =>
+    apiFetch<ResultReview>(`/results/review/${resultId}`, authHeaders(token)),
   certificate: (token: string, resultId: string) =>
     apiFetch(`/results/my/${resultId}/certificate`, authHeaders(token)),
   evaluate: (token: string, sessionId: string) =>

@@ -235,9 +235,6 @@ export default function LoginPage() {
           </div>
           )}
 
-          <p className="text-center text-sm text-muted-foreground">
-            <Link href="/forgot-password" className="font-semibold text-primary hover:underline">Forgot password?</Link>
-          </p>
           {(process.env.NEXT_PUBLIC_ALLOW_PUBLIC_REGISTRATION === 'true'
             || process.env.NODE_ENV !== 'production') && (
           <p className="text-center text-sm text-muted-foreground">
