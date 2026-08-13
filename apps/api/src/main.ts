@@ -14,6 +14,9 @@ async function bootstrap() {
     bufferLogs: true,
   });
 
+  // Honor X-Forwarded-For from nginx / Next.js proxy so rate limits are per client, not per proxy.
+  app.set('trust proxy', 1);
+
   const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads', 'materials');
   fs.mkdirSync(uploadDir, { recursive: true });
 

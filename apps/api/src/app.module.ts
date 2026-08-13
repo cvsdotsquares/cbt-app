@@ -46,13 +46,18 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     ThrottlerModule.forRootAsync({
       imports: [RedisModule],
       inject: [RedisThrottlerStorage],
-      useFactory: (storage: RedisThrottlerStorage) => ({
-        throttlers: [
-          { name: 'default', ttl: 60000, limit: 100 },
-          { name: 'auth', ttl: 60000, limit: 10 },
-        ],
-        storage,
-      }),
+      useFactory: (storage: RedisThrottlerStorage) => {
+        const defaultTtl = Number(process.env.THROTTLE_DEFAULT_TTL || 60_000);
+        const defaultLimit = Number(process.env.THROTTLE_DEFAULT_LIMIT || 300);
+        const authLimit = Number(process.env.THROTTLE_AUTH_LIMIT || 20);
+        return {
+          throttlers: [
+            { name: 'default', ttl: defaultTtl, limit: defaultLimit },
+            { name: 'auth', ttl: defaultTtl, limit: authLimit },
+          ],
+          storage,
+        };
+      },
     }),
     PrismaModule,
     AuthModule,

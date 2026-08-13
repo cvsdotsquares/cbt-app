@@ -44,7 +44,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
   @ApiOperation({ summary: 'Login with email and password' })
   login(@Body() dto: LoginDto, @Req() req: Request) {
     return this.authService.login(

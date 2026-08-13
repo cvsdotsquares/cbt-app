@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import {
   ACCESS_TOKEN_COOKIE,
@@ -18,7 +18,15 @@ const API_BASE = (
   || (process.env.NODE_ENV === 'production' ? 'https://cbt-api-ktkr.onrender.com' : 'http://localhost:4000')
 ).replace(/\/$/, '');
 
-export async function POST() {
+function clientIp(req: NextRequest): string | undefined {
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0]?.trim();
+  const realIp = req.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
+  return req.headers.get('cf-connecting-ip') ?? undefined;
+}
+
+export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
   const refreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
 
@@ -27,12 +35,21 @@ export async function POST() {
   }
 
   const tenantId = process.env.NEXT_PUBLIC_TENANT_ID || 'default';
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Tenant-ID': tenantId,
+  };
+  const ip = clientIp(req);
+  if (ip) {
+    headers['X-Forwarded-For'] = ip;
+    headers['X-Real-IP'] = ip;
+  }
 
   let upstream: Response;
   try {
     upstream = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': tenantId },
+      headers,
       body: JSON.stringify({ refreshToken }),
     });
   } catch {

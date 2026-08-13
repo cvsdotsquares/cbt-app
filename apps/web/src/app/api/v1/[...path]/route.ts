@@ -7,6 +7,15 @@ const API_BASE = (
   || (process.env.NODE_ENV === 'production' ? 'https://cbt-api-ktkr.onrender.com' : 'http://localhost:4000')
 ).replace(/\/$/, '');
 
+/** Real browser IP for upstream rate limiting (Next.js otherwise appears as 127.0.0.1). */
+function clientIp(req: NextRequest): string | undefined {
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0]?.trim();
+  const realIp = req.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
+  return req.headers.get('cf-connecting-ip') ?? undefined;
+}
+
 async function proxyRequest(req: NextRequest, pathSegments: string[]) {
   const path = pathSegments.join('/');
   const targetUrl = `${API_BASE}/api/v1/${path}${req.nextUrl.search}`;
@@ -27,6 +36,12 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]) {
     if (accessToken) {
       headers.set('authorization', `Bearer ${accessToken}`);
     }
+  }
+
+  const ip = clientIp(req);
+  if (ip) {
+    headers.set('x-forwarded-for', ip);
+    headers.set('x-real-ip', ip);
   }
 
   let requestBody: BodyInit | undefined;
