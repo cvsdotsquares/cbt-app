@@ -41,7 +41,15 @@ export function DataTableCell({ children, className }: { children: React.ReactNo
   return <td className={cn('px-3 py-3 text-sm sm:px-5 sm:py-4', className)}>{children}</td>;
 }
 
-export function EmptyState({ icon: Icon, title, description }: { icon: React.ComponentType<{ className?: string }>; title: string; description?: string }) {
+function DefaultEmptyIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v4" /><path d="m6.8 15-3.5 2" /><path d="m20.7 17-3.5-2" /><path d="M6.8 9 3.3 7" /><path d="m20.7 7-3.5 2" /><circle cx="12" cy="12" r="4" />
+    </svg>
+  );
+}
+
+export function EmptyState({ icon: Icon = DefaultEmptyIcon, title, description }: { icon?: React.ComponentType<{ className?: string }>; title: string; description?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/60">

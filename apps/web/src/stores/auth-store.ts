@@ -75,6 +75,24 @@ export async function syncSessionFromStore() {
     return syncAuthSession(state.accessToken, state.refreshToken);
   }
 
+  // Persist may say "logged in" while tokens live only in HttpOnly cookies — try refresh first.
+  try {
+    const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      await useAuthStore.getState().updateTokens(data.accessToken, data.refreshToken);
+      if (data.user) {
+        useAuthStore.setState({
+          user: data.user,
+          isAuthenticated: true,
+        });
+      }
+      return Boolean(data.isAdmin);
+    }
+  } catch {
+    /* no valid refresh cookie */
+  }
+
   await clearAuthSession();
   useAuthStore.setState({
     user: null,
@@ -92,5 +110,5 @@ export function getPostLoginPath(roles: unknown) {
     const can = (p: Permission | string) => permissions.includes(p as never);
     return getDefaultDashboardPath(can, normalized);
   }
-  return isAdmin(normalized) ? '/dashboard' : '/my-exams';
+  return isAdmin(normalized) ? '/dashboard' : '/student';
 }

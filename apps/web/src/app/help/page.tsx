@@ -25,7 +25,7 @@ export default function CandidateHelpPage() {
           <Logo />
           <div className="flex items-center gap-1 sm:gap-2">
             <Button variant="outline" size="sm" asChild>
-              <Link href="/my-exams">
+              <Link href="/student">
                 <ArrowLeft className="mr-1.5 h-4 w-4" />
                 Portal
               </Link>

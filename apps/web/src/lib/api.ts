@@ -4,12 +4,6 @@ import { isAdmin, isCandidate, normalizeRoles } from './roles';
 const RENDER_API_BASE =
   process.env.API_PROXY_URL || 'https://cbt-api-ktkr.onrender.com';
 
-function isLocalDevHost(): boolean {
-  if (typeof window === 'undefined') return false;
-  const host = window.location.hostname;
-  return host === 'localhost' || host === '127.0.0.1';
-}
-
 /**
  * Browser always uses same-origin `/api/v1` proxy (HttpOnly cookie auth, no CORS).
  * SSR uses the configured API base URL.
@@ -38,7 +32,7 @@ function formatNonJsonError(raw: string, ok: boolean): string {
   return 'API unavailable. Wait 30 seconds and try again.';
 }
 
-import { fetchWithColdStartRetry as fetchWithBackoff } from './cold-start-retry';
+import { fetchWithColdStartRetry as fetchWithBackoff, shouldUseColdStartRetry } from './cold-start-retry';
 
 async function fetchWithColdStartRetry(url: string, init: RequestInit): Promise<Response> {
   return fetchWithBackoff(url, init, (status, raw) =>
@@ -262,7 +256,7 @@ export async function apiFetch<T>(endpoint: string, options: ApiOptions = {}): P
   headers['X-Tenant-ID'] = skipAuth ? getTenantId() : getAuthTenantId();
 
   const requestUrl = `${getApiUrl()}${endpoint}`;
-  const useColdStartRetry = typeof window !== 'undefined' && !isLocalDevHost();
+  const useColdStartRetry = typeof window !== 'undefined' && shouldUseColdStartRetry(requestUrl);
 
   let response = useColdStartRetry
     ? await fetchWithColdStartRetry(requestUrl, { ...fetchOptions, headers, credentials: 'include' })
@@ -305,7 +299,7 @@ function formatApiError(data: unknown): string {
   return 'Request failed';
 }
 
-function authHeaders(token: string) {
+export function authHeaders(token: string) {
   return { token, headers: { 'X-Device-Fingerprint': getFingerprint() } };
 }
 
@@ -521,7 +515,7 @@ export const resultsApi = {
       Authorization: `Bearer ${token}`,
       'X-Tenant-ID': getAuthTenantId(),
     };
-    const useRetry = typeof window !== 'undefined' && !isLocalDevHost();
+    const useRetry = typeof window !== 'undefined' && shouldUseColdStartRetry(url);
     const res = useRetry
       ? await fetchWithColdStartRetry(url, { headers, credentials: 'include' })
       : await fetch(url, { headers, credentials: 'include' });
@@ -718,9 +712,10 @@ export const materialsApi = {
       'X-Tenant-ID': getAuthTenantId(),
       'X-Device-Fingerprint': getFingerprint(),
     };
-    const directApi = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || '/api/v1';
-    const requestUrl = `${directApi}/materials/upload`;
-    const useColdStartRetry = typeof window !== 'undefined' && !isLocalDevHost();
+    const requestUrl = typeof window !== 'undefined'
+      ? '/api/v1/materials/upload'
+      : `${RENDER_API_BASE.replace(/\/$/, '')}/api/v1/materials/upload`;
+    const useColdStartRetry = typeof window !== 'undefined' && shouldUseColdStartRetry(requestUrl);
 
     let res = useColdStartRetry
       ? await fetchWithColdStartRetry(requestUrl, { method: 'POST', headers, body: formData, credentials: 'include' })
@@ -815,6 +810,241 @@ export const learningApi = {
 
 export const onboardingApi = {
   setupStatus: (token: string) => apiFetch('/onboarding/setup-status', authHeaders(token)),
+};
+
+export const schoolApi = {
+  getPeriods: (token: string) => apiFetch('/school/periods', authHeaders(token)),
+  updatePeriods: (token: string, periods: { periodNumber: number; label: string; startTime: string; endTime: string }[]) =>
+    apiFetch('/school/periods', { method: 'PATCH', body: JSON.stringify({ periods }), ...authHeaders(token) }),
+  getTimetable: (token: string, batchId: string) =>
+    apiFetch(`/school/timetable?batchId=${batchId}`, authHeaders(token)),
+  upsertTimetableSlot: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school/timetable/slots', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  deleteTimetableSlot: (token: string, id: string) =>
+    apiFetch(`/school/timetable/slots/${id}`, { method: 'DELETE', ...authHeaders(token) }),
+  getAttendance: (token: string, batchId: string, date: string) =>
+    apiFetch(`/school/attendance?batchId=${batchId}&date=${date}`, authHeaders(token)),
+  markAttendance: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school/attendance', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  attendanceReport: (token: string, batchId: string, from: string, to: string) =>
+    apiFetch(`/school/attendance/report?batchId=${batchId}&from=${from}&to=${to}`, authHeaders(token)),
+  listHomework: (token: string, params?: { batchId?: string; subjectId?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.batchId) q.set('batchId', params.batchId);
+    if (params?.subjectId) q.set('subjectId', params.subjectId);
+    return apiFetch(`/school/homework?${q}`, authHeaders(token));
+  },
+  createHomework: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school/homework', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  getHomework: (token: string, id: string) => apiFetch(`/school/homework/${id}`, authHeaders(token)),
+  submitHomework: (token: string, id: string, content: string) =>
+    apiFetch(`/school/homework/${id}/submit`, { method: 'POST', body: JSON.stringify({ content }), ...authHeaders(token) }),
+  gradeHomework: (token: string, submissionId: string, grade: string, feedback?: string) =>
+    apiFetch(`/school/homework/submissions/${submissionId}/grade`, {
+      method: 'PATCH',
+      body: JSON.stringify({ grade, feedback }),
+      ...authHeaders(token),
+    }),
+  studentHomework: (token: string) => apiFetch('/school/student/homework', authHeaders(token)),
+  listNotices: (token: string) => apiFetch('/school/notices', authHeaders(token)),
+  createNotice: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school/notices', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  deleteNotice: (token: string, id: string) =>
+    apiFetch(`/school/notices/${id}`, { method: 'DELETE', ...authHeaders(token) }),
+  linkParent: (token: string, body: { parentUserId: string; candidateId: string; relation?: string }) =>
+    apiFetch('/school/parents/link', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  parentDashboard: (token: string) => apiFetch('/school/parent/dashboard', authHeaders(token)),
+  studentDashboard: (token: string) => apiFetch('/school/student/dashboard', authHeaders(token)),
+  listLiveClasses: (token: string, params?: { batchId?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.batchId) q.set('batchId', params.batchId);
+    if (params?.status) q.set('status', params.status);
+    return apiFetch(`/school/live-classes?${q}`, authHeaders(token));
+  },
+  createLiveClass: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school/live-classes', { method: 'POST', body: JSON.stringify(body), ...authHeaders(token) }),
+  updateLiveClassStatus: (token: string, id: string, status: string, recordingUrl?: string) =>
+    apiFetch(`/school/live-classes/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, recordingUrl }),
+      ...authHeaders(token),
+    }),
+  joinLiveClass: (token: string, id: string) =>
+    apiFetch(`/school/live-classes/${id}/join`, { method: 'POST', ...authHeaders(token) }),
+  studentLiveClasses: (token: string) => apiFetch('/school/student/live-classes', authHeaders(token)),
+};
+
+const erpHeaders = (token: string) => authHeaders(token);
+
+export const schoolErpApi = {
+  dashboard: (token: string) => apiFetch('/school-erp/dashboard', erpHeaders(token)),
+  // Academic
+  listAcademicYears: (token: string) => apiFetch('/school-erp/academic-years', erpHeaders(token)),
+  createAcademicYear: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/academic-years', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listCalendar: (token: string, from?: string, to?: string) =>
+    apiFetch(`/school-erp/calendar?${new URLSearchParams({ ...(from && { from }), ...(to && { to }) })}`, erpHeaders(token)),
+  createCalendarEvent: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/calendar', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  // Admissions
+  listEnquiries: (token: string, status?: string) =>
+    apiFetch(`/school-erp/admissions/enquiries${status ? `?status=${status}` : ''}`, erpHeaders(token)),
+  createEnquiry: (token: string, body: Record<string, string>) =>
+    apiFetch('/school-erp/admissions/enquiries', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  updateEnquiryStatus: (token: string, id: string, status: string) =>
+    apiFetch(`/school-erp/admissions/enquiries/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }), ...erpHeaders(token) }),
+  listApplications: (token: string, status?: string) =>
+    apiFetch(`/school-erp/admissions/applications${status ? `?status=${status}` : ''}`, erpHeaders(token)),
+  createApplication: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/admissions/applications', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  updateApplicationStatus: (token: string, id: string, status: string, remarks?: string) =>
+    apiFetch(`/school-erp/admissions/applications/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, remarks }), ...erpHeaders(token) }),
+  // Fees
+  feeSummary: (token: string) => apiFetch('/school-erp/fees/summary', erpHeaders(token)),
+  listFeeHeads: (token: string) => apiFetch('/school-erp/fees/heads', erpHeaders(token)),
+  createFeeHead: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/fees/heads', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listFeeStructures: (token: string) => apiFetch('/school-erp/fees/structures', erpHeaders(token)),
+  createFeeStructure: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/fees/structures', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listFeeInvoices: (token: string, candidateId?: string) =>
+    apiFetch(`/school-erp/fees/invoices${candidateId ? `?candidateId=${candidateId}` : ''}`, erpHeaders(token)),
+  createFeeInvoice: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/fees/invoices', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  recordFeePayment: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/fees/payments', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  // Report cards
+  listTerms: (token: string) => apiFetch('/school-erp/terms', erpHeaders(token)),
+  createTerm: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/terms', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listGrades: (token: string, termId: string, candidateId?: string) =>
+    apiFetch(`/school-erp/grades?termId=${termId}${candidateId ? `&candidateId=${candidateId}` : ''}`, erpHeaders(token)),
+  upsertGrade: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/grades', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listReportCards: (token: string, candidateId?: string) =>
+    apiFetch(`/school-erp/report-cards${candidateId ? `?candidateId=${candidateId}` : ''}`, erpHeaders(token)),
+  generateReportCard: (token: string, termId: string, candidateId: string) =>
+    apiFetch('/school-erp/report-cards/generate', { method: 'POST', body: JSON.stringify({ termId, candidateId }), ...erpHeaders(token) }),
+  // Transport
+  listTransportRoutes: (token: string) => apiFetch('/school-erp/transport/routes', erpHeaders(token)),
+  createTransportRoute: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/transport/routes', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  assignTransport: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/transport/assign', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  // Library
+  listLibraryBooks: (token: string, search?: string) =>
+    apiFetch(`/school-erp/library/books${search ? `?search=${encodeURIComponent(search)}` : ''}`, erpHeaders(token)),
+  createLibraryBook: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/library/books', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  issueBook: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/library/issue', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  returnBook: (token: string, issueId: string) =>
+    apiFetch(`/school-erp/library/return/${issueId}`, { method: 'POST', ...erpHeaders(token) }),
+  // HR
+  listStaff: (token: string) => apiFetch('/school-erp/hr/staff', erpHeaders(token)),
+  createStaff: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/hr/staff', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listLeave: (token: string, status?: string) =>
+    apiFetch(`/school-erp/hr/leave${status ? `?status=${status}` : ''}`, erpHeaders(token)),
+  applyLeave: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/hr/leave', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  approveLeave: (token: string, id: string, approved: boolean) =>
+    apiFetch(`/school-erp/hr/leave/${id}`, { method: 'PATCH', body: JSON.stringify({ approved }), ...erpHeaders(token) }),
+  // Hostel
+  listHostels: (token: string) => apiFetch('/school-erp/hostel', erpHeaders(token)),
+  createHostel: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/hostel', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  createHostelRoom: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/hostel/rooms', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  allocateHostel: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/hostel/allocate', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  // Inventory
+  listInventory: (token: string) => apiFetch('/school-erp/inventory', erpHeaders(token)),
+  createInventoryItem: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/inventory', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  inventoryTransaction: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/inventory/transactions', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  // Notifications & discipline
+  listNotifications: (token: string) => apiFetch('/school-erp/notifications', erpHeaders(token)),
+  sendNotification: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/notifications', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listDiscipline: (token: string, candidateId?: string) =>
+    apiFetch(`/school-erp/discipline${candidateId ? `?candidateId=${candidateId}` : ''}`, erpHeaders(token)),
+  createDiscipline: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/discipline', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  // Extended ERP
+  schoolReports: (token: string) => apiFetch('/school-erp/reports', erpHeaders(token)),
+  listDepartments: (token: string) => apiFetch('/school-erp/departments', erpHeaders(token)),
+  createDepartment: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/departments', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listBranches: (token: string) => apiFetch('/school-erp/branches', erpHeaders(token)),
+  createBranch: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/branches', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listDefaulters: (token: string) => apiFetch('/school-erp/fees/defaulters', erpHeaders(token)),
+  dailyCollection: (token: string, date?: string) =>
+    apiFetch(`/school-erp/fees/daily-collection${date ? `?date=${date}` : ''}`, erpHeaders(token)),
+  listScholarships: (token: string, candidateId?: string) =>
+    apiFetch(`/school-erp/fees/scholarships${candidateId ? `?candidateId=${candidateId}` : ''}`, erpHeaders(token)),
+  createScholarship: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/fees/scholarships', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  generateBatchInvoices: (token: string, batchId: string, feeStructureId: string) =>
+    apiFetch('/school-erp/fees/generate-batch', { method: 'POST', body: JSON.stringify({ batchId, feeStructureId }), ...erpHeaders(token) }),
+  createPaymentOrder: (token: string, invoiceId: string) =>
+    apiFetch('/school-erp/fees/payment-order', { method: 'POST', body: JSON.stringify({ invoiceId }), ...erpHeaders(token) }),
+  verifyPayment: (
+    token: string,
+    orderId: string,
+    razorpayPaymentId?: string,
+    razorpaySignature?: string,
+  ) =>
+    apiFetch('/school-erp/fees/payment-verify', {
+      method: 'POST',
+      body: JSON.stringify({ orderId, razorpayPaymentId, razorpaySignature }),
+      ...erpHeaders(token),
+    }),
+  listStaffAttendance: (token: string, date?: string) =>
+    apiFetch(`/school-erp/hr/staff-attendance${date ? `?date=${date}` : ''}`, erpHeaders(token)),
+  markStaffAttendance: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/hr/staff-attendance', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listStudentLeave: (token: string, status?: string) =>
+    apiFetch(`/school-erp/student-leave${status ? `?status=${status}` : ''}`, erpHeaders(token)),
+  applyStudentLeave: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/student-leave', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  approveStudentLeave: (token: string, id: string, approved: boolean) =>
+    apiFetch(`/school-erp/student-leave/${id}`, { method: 'PATCH', body: JSON.stringify({ approved }), ...erpHeaders(token) }),
+  promoteStudents: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/promotions', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listAlumni: (token: string) => apiFetch('/school-erp/alumni', erpHeaders(token)),
+  markAlumni: (token: string, candidateId: string, body: Record<string, unknown>) =>
+    apiFetch(`/school-erp/alumni/${candidateId}`, { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listCertificates: (token: string, candidateId?: string) =>
+    apiFetch(`/school-erp/certificates${candidateId ? `?candidateId=${candidateId}` : ''}`, erpHeaders(token)),
+  issueCertificate: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/certificates', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listGradingConfigs: (token: string) => apiFetch('/school-erp/grading-configs', erpHeaders(token)),
+  upsertGradingConfig: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/grading-configs', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  listVehicles: (token: string) => apiFetch('/school-erp/transport/vehicles', erpHeaders(token)),
+  createVehicle: (token: string, body: Record<string, unknown>) =>
+    apiFetch('/school-erp/transport/vehicles', { method: 'POST', body: JSON.stringify(body), ...erpHeaders(token) }),
+  driverRoute: (token: string, phone: string) =>
+    apiFetch(`/school-erp/transport/driver-route?phone=${encodeURIComponent(phone)}`, erpHeaders(token)),
+  listSuppliers: (token: string) => apiFetch('/school-erp/inventory/suppliers', erpHeaders(token)),
+  listPurchaseOrders: (token: string) => apiFetch('/school-erp/inventory/purchase-orders', erpHeaders(token)),
+  detectTimetableClashes: (token: string) => apiFetch('/school-erp/timetable/clashes', erpHeaders(token)),
+  notifyAbsent: (token: string, batchId: string, date: string) =>
+    apiFetch('/school-erp/notifications/absent-alert', { method: 'POST', body: JSON.stringify({ batchId, date }), ...erpHeaders(token) }),
+  notifyFeeDefaulters: (token: string) =>
+    apiFetch('/school-erp/notifications/fee-reminder', { method: 'POST', ...erpHeaders(token) }),
+};
+
+export const publicAdmissionApi = {
+  getSchoolInfo: (tenantSlug: string) =>
+    apiFetch<{ found: boolean; name?: string; logoUrl?: string }>(`/public/admission/${tenantSlug}/info`),
+  submitEnquiry: (tenantSlug: string, body: Record<string, string>) =>
+    apiFetch(`/public/admission/${tenantSlug}/enquiry`, { method: 'POST', body: JSON.stringify(body) }),
+  submitApplication: (tenantSlug: string, body: Record<string, unknown>) =>
+    apiFetch(`/public/admission/${tenantSlug}/apply`, { method: 'POST', body: JSON.stringify(body) }),
 };
 
 export const tenantsApi = {

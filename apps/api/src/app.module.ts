@@ -26,6 +26,8 @@ import { MaterialsModule } from './modules/materials/materials.module';
 import { LearningModule } from './modules/learning/learning.module';
 import { RagModule } from './modules/rag/rag.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { SchoolModule } from './modules/school/school.module';
+import { SchoolErpModule } from './modules/school-erp/school-erp.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
@@ -74,6 +76,8 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     LearningModule,
     RagModule,
     OnboardingModule,
+    SchoolModule,
+    SchoolErpModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

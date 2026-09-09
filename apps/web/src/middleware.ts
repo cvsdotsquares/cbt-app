@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ACCESS_TOKEN_COOKIE, verifyAccessToken } from '@/lib/auth-cookies';
-import { isAdmin, isTeacherOnly, normalizeRoles } from '@/lib/roles';
+import { getPortalHome, isAdmin, isParent, isTeacherOnly, normalizeRoles } from '@/lib/roles';
 
 const PUBLIC_PATHS = ['/login', '/register', '/mfa', '/verify'];
 
@@ -33,6 +33,7 @@ export async function middleware(request: NextRequest) {
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   let isAuthenticated = false;
   let isAdminUser = false;
+  let isParentUser = false;
   let roles: string[] = [];
 
   if (accessToken) {
@@ -41,12 +42,14 @@ export async function middleware(request: NextRequest) {
       isAuthenticated = true;
       roles = normalizeRoles(payload.roles);
       isAdminUser = isAdmin(roles);
+      isParentUser = isParent(roles);
     }
   }
 
   if (pathname === '/') {
     if (isAuthenticated) {
-      return NextResponse.redirect(new URL(isAdminUser ? staffHome(roles) : '/my-exams', request.url));
+      const home = isAdminUser ? staffHome(roles) : getPortalHome(roles);
+      return NextResponse.redirect(new URL(home, request.url));
     }
     return NextResponse.redirect(new URL('/login', request.url));
   }
@@ -62,11 +65,27 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith('/dashboard') && !isAdminUser) {
-    return NextResponse.redirect(new URL('/my-exams', request.url));
+    return NextResponse.redirect(new URL(getPortalHome(roles), request.url));
+  }
+
+  if (pathname.startsWith('/parent') && !isParentUser) {
+    return NextResponse.redirect(new URL(isAdminUser ? staffHome(roles) : '/student', request.url));
+  }
+
+  if (pathname.startsWith('/student') && isParentUser) {
+    return NextResponse.redirect(new URL('/parent', request.url));
+  }
+
+  if (pathname.startsWith('/student') && isAdminUser) {
+    return NextResponse.redirect(new URL(staffHome(roles), request.url));
   }
 
   if ((pathname === '/my-exams' || pathname.startsWith('/exam/')) && isAdminUser) {
     return NextResponse.redirect(new URL(staffHome(roles), request.url));
+  }
+
+  if ((pathname === '/my-exams' || pathname.startsWith('/exam/')) && isParentUser) {
+    return NextResponse.redirect(new URL('/parent', request.url));
   }
 
   if (pathname === '/help' || pathname.startsWith('/help/')) {

@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { Role, Permission, ROLE_PERMISSIONS } from '@cbt/shared';
 import { seedNcertCurriculum, seedDemoBatch } from './ncert-seed';
+import { seedSchoolErpDemo } from './erp-seed';
 
 const prisma = new PrismaClient();
 
@@ -132,8 +133,14 @@ async function main() {
   await syncUserRoles(teacherUser.id, [Role.TEACHER]);
 
   const candidateRecord = await prisma.candidate.upsert({
-    where: { userId: candidateUser.id },
-    update: {},
+    where: {
+      tenantId_registrationNumber: { tenantId: tenant.id, registrationNumber: 'CAND-2026-00001' },
+    },
+    update: {
+      userId: candidateUser.id,
+      kycStatus: 'VERIFIED',
+      kycVerifiedAt: new Date(),
+    },
     create: {
       tenantId: tenant.id,
       userId: candidateUser.id,
@@ -290,7 +297,10 @@ async function main() {
     const science = class10
       ? await prisma.subject.findFirst({ where: { academicClassId: class10.id, code: 'SCI' } })
       : null;
-    if (demoBatch && science) {
+    const teacherUser = await prisma.user.findUnique({
+      where: { tenantId_email: { tenantId: tenant.id, email: 'teacher@example.com' } },
+    });
+    if (demoBatch && science && teacherUser) {
       await prisma.teacherAssignment.upsert({
         where: {
           userId_batchId_subjectId: {
@@ -307,6 +317,47 @@ async function main() {
         },
       });
     }
+
+    const parentRole = await prisma.role.findUnique({ where: { name: Role.PARENT } });
+    const parentUser = await prisma.user.upsert({
+      where: { tenantId_email: { tenantId: tenant.id, email: 'parent@example.com' } },
+      update: { status: 'ACTIVE' },
+      create: {
+        tenantId: tenant.id,
+        email: 'parent@example.com',
+        passwordHash: await bcrypt.hash('Parent@123', 12),
+        firstName: 'Demo',
+        lastName: 'Parent',
+        status: 'ACTIVE',
+        emailVerified: true,
+        userRoles: parentRole ? { create: { roleId: parentRole.id } } : undefined,
+      },
+    });
+    await syncUserRoles(parentUser.id, [Role.PARENT]);
+    if (candidate.id) {
+      await prisma.parentStudentLink.upsert({
+        where: {
+          parentUserId_candidateId: { parentUserId: parentUser.id, candidateId: candidate.id },
+        },
+        update: {},
+        create: {
+          parentUserId: parentUser.id,
+          candidateId: candidate.id,
+          relation: 'Father',
+        },
+      });
+    }
+
+    if (candidate.id && teacherUser && demoBatch && science) {
+      await seedSchoolErpDemo(prisma, {
+        tenantId: tenant.id,
+        adminId: admin.id,
+        candidateId: candidate.id,
+        teacherUserId: teacherUser.id,
+        batchId: demoBatch.id,
+        subjectId: science.id,
+      });
+    }
   }
 
   console.log('Seed completed successfully');
@@ -314,6 +365,7 @@ async function main() {
     console.log('Admin: admin@cbt-platform.com / Admin@123');
     console.log('Teacher: teacher@example.com / Teacher@123');
     console.log('Student: candidate@example.com / Candidate@123');
+    console.log('Parent: parent@example.com / Parent@123');
     console.log(`Demo exam: ${exam.code} (${exam.title})`);
   } else {
     console.log('Demo users skipped (set SEED_DEMO_USERS=true to create them)');

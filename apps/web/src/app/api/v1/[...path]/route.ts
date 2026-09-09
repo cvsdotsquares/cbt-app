@@ -14,11 +14,21 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]) {
   const contentType = req.headers.get('content-type') || '';
   const isMultipart = contentType.includes('multipart/form-data');
 
+  const hopByHop = new Set([
+    'host',
+    'connection',
+    'content-length',
+    'transfer-encoding',
+    'content-encoding',
+    'expect',
+    'keep-alive',
+    'upgrade',
+    'proxy-connection',
+  ]);
+
   const headers = new Headers();
   req.headers.forEach((value, key) => {
-    const lower = key.toLowerCase();
-    if (lower === 'host' || lower === 'connection') return;
-    if (lower === 'content-length' && isMultipart) return;
+    if (hopByHop.has(key.toLowerCase())) return;
     headers.set(key, value);
   });
 
@@ -34,16 +44,26 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]) {
     requestBody = isMultipart ? await req.arrayBuffer() : await req.text();
   }
 
+  const isLocalApi = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(API_BASE);
+
   let upstream: Response;
   try {
-    upstream = await fetchWithColdStartRetry(targetUrl, {
-      method: req.method,
-      headers,
-      body: requestBody,
-    });
-  } catch {
+    const fetchInit = { method: req.method, headers, body: requestBody, cache: 'no-store' as RequestCache };
+    upstream = isLocalApi
+      ? await fetch(targetUrl, fetchInit)
+      : await fetchWithColdStartRetry(targetUrl, fetchInit);
+  } catch (err) {
+    const devDetail = process.env.NODE_ENV === 'development' && err instanceof Error
+      ? err.message
+      : null;
     return NextResponse.json(
-      { success: false, error: { message: 'API is waking up (free tier). Wait 30–60 seconds, then try again.' } },
+      {
+        success: false,
+        error: {
+          message: devDetail
+            ?? 'API is waking up (free tier). Wait 30–60 seconds, then try again.',
+        },
+      },
       { status: 502 },
     );
   }

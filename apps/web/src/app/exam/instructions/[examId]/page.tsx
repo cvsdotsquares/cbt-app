@@ -45,7 +45,7 @@ export default function ExamInstructionsPage() {
   if (!ready) return null;
   if (error) return (
     <div className="flex min-h-screen items-center justify-center mesh-bg p-4">
-      <Card className="max-w-md p-6"><p className="text-destructive">{error}</p><Button className="mt-4" onClick={() => router.push('/my-exams')}>Back</Button></Card>
+      <Card className="max-w-md p-6"><p className="text-destructive">{error}</p><Button className="mt-4" onClick={() => router.push('/student/exams')}>Back</Button></Card>
     </div>
   );
   if (!exam) return <div className="flex min-h-screen items-center justify-center mesh-bg">Loading exam details...</div>;
@@ -68,7 +68,7 @@ export default function ExamInstructionsPage() {
       <header className="border-b bg-card/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4">
           <Logo />
-          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => router.push('/my-exams')}>
+          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => router.push('/student/exams')}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
         </div>

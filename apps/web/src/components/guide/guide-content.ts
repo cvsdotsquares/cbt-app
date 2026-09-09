@@ -312,7 +312,7 @@ export const CANDIDATE_GUIDE: RoleGuide = {
         {
           title: 'Class Tests tab',
           description: 'See upcoming, live, and past tests with status badges and countdown for tests that have not opened yet.',
-          href: '/my-exams',
+          href: '/student',
           hrefLabel: 'Back to portal',
         },
         {

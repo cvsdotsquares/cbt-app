@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --port 3002",
     "build": "next build",
+    "prestart": "node -e \"const fs=require('fs');if(!fs.existsSync('.next/BUILD_ID')){console.error('\\nNo production build found. For development run: npm run dev\\nFor production run: npm run build && npm start\\n');process.exit(1)}\"",
     "start": "next start",
     "lint": "next lint"
   },

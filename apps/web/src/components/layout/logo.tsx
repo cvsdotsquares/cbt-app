@@ -22,13 +22,13 @@ export function Logo({ className, variant = 'default' }: { className?: string; v
           'truncate text-sm font-bold leading-none tracking-tight sm:text-[15px]',
           isLight ? 'text-white' : 'text-foreground',
         )}>
-          NCERT Institute
+          SchoolHub
         </p>
         <p className={cn(
           'mt-1 text-[10px] font-semibold uppercase tracking-[0.15em]',
           isLight ? 'text-white/60' : 'text-muted-foreground',
         )}>
-          Classes 9–12
+          School Management
         </p>
       </div>
     </div>

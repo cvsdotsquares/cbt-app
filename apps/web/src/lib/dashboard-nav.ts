@@ -9,6 +9,12 @@ export interface DashboardRoute {
 /** Institute workflow order — used for default landing and access checks */
 export const DASHBOARD_ROUTES: DashboardRoute[] = [
   { path: '/dashboard', permission: Permission.ANALYTICS_VIEW, exact: true },
+  { path: '/dashboard/school-admin', permission: Permission.ADMISSION_READ },
+  { path: '/dashboard/live-classes', permission: Permission.LIVE_CLASS_READ },
+  { path: '/dashboard/timetable', permission: Permission.TIMETABLE_READ },
+  { path: '/dashboard/attendance', permission: Permission.ATTENDANCE_READ },
+  { path: '/dashboard/homework', permission: Permission.HOMEWORK_READ },
+  { path: '/dashboard/notices', permission: Permission.NOTICE_READ },
   { path: '/dashboard/materials', permission: Permission.MATERIAL_READ },
   { path: '/dashboard/batches', permission: Permission.BATCH_READ },
   { path: '/dashboard/syllabus', permission: Permission.CURRICULUM_READ },
@@ -63,5 +69,5 @@ export function getDefaultDashboardPath(
   for (const route of DASHBOARD_ROUTES) {
     if (can(route.permission)) return route.path;
   }
-  return '/my-exams';
+  return '/student';
 }

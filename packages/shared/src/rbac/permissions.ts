@@ -95,4 +95,68 @@ export enum Permission {
   AI_GENERATE_TEST = 'ai:generate_test',
   LEARNING_READ = 'learning:read',
   LEARNING_MANAGE = 'learning:manage',
+
+  // School operations
+  TIMETABLE_READ = 'timetable:read',
+  TIMETABLE_MANAGE = 'timetable:manage',
+  ATTENDANCE_READ = 'attendance:read',
+  ATTENDANCE_MANAGE = 'attendance:manage',
+  HOMEWORK_READ = 'homework:read',
+  HOMEWORK_MANAGE = 'homework:manage',
+  HOMEWORK_SUBMIT = 'homework:submit',
+  NOTICE_READ = 'notice:read',
+  NOTICE_MANAGE = 'notice:manage',
+  PARENT_READ = 'parent:read',
+  LIVE_CLASS_READ = 'live_class:read',
+  LIVE_CLASS_MANAGE = 'live_class:manage',
+  LIVE_CLASS_JOIN = 'live_class:join',
+
+  // School ERP — Admissions & Academic
+  ADMISSION_READ = 'admission:read',
+  ADMISSION_MANAGE = 'admission:manage',
+  ACADEMIC_YEAR_READ = 'academic_year:read',
+  ACADEMIC_YEAR_MANAGE = 'academic_year:manage',
+  CALENDAR_READ = 'calendar:read',
+  CALENDAR_MANAGE = 'calendar:manage',
+  REPORT_CARD_READ = 'report_card:read',
+  REPORT_CARD_MANAGE = 'report_card:manage',
+
+  // Fees
+  FEE_READ = 'fee:read',
+  FEE_MANAGE = 'fee:manage',
+  FEE_COLLECT = 'fee:collect',
+
+  // Transport, Library, Hostel
+  TRANSPORT_READ = 'transport:read',
+  TRANSPORT_MANAGE = 'transport:manage',
+  LIBRARY_READ = 'library:read',
+  LIBRARY_MANAGE = 'library:manage',
+  HOSTEL_READ = 'hostel:read',
+  HOSTEL_MANAGE = 'hostel:manage',
+
+  // HR & Inventory
+  HR_READ = 'hr:read',
+  HR_MANAGE = 'hr:manage',
+  INVENTORY_READ = 'inventory:read',
+  INVENTORY_MANAGE = 'inventory:manage',
+
+  // Communications & Discipline
+  NOTIFICATION_READ = 'notification:read',
+  NOTIFICATION_SEND = 'notification:send',
+  DISCIPLINE_READ = 'discipline:read',
+  DISCIPLINE_MANAGE = 'discipline:manage',
+
+  // Extended ERP
+  DEPARTMENT_READ = 'department:read',
+  DEPARTMENT_MANAGE = 'department:manage',
+  BRANCH_READ = 'branch:read',
+  BRANCH_MANAGE = 'branch:manage',
+  CERTIFICATE_READ = 'certificate:read',
+  CERTIFICATE_MANAGE = 'certificate:manage',
+  ALUMNI_READ = 'alumni:read',
+  ALUMNI_MANAGE = 'alumni:manage',
+  STUDENT_LEAVE_READ = 'student_leave:read',
+  STUDENT_LEAVE_MANAGE = 'student_leave:manage',
+  PROMOTION_MANAGE = 'promotion:manage',
+  PAYMENT_ONLINE = 'payment:online',
 }

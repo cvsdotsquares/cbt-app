@@ -14,8 +14,13 @@ import { MobileNav } from './mobile-nav';
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Institute Home',
-  '/dashboard/materials': 'NCERT Books',
-  '/dashboard/batches': 'Classes & Batches',
+  '/dashboard/live-classes': 'Live Classes',
+  '/dashboard/timetable': 'Timetable',
+  '/dashboard/attendance': 'Attendance',
+  '/dashboard/homework': 'Homework',
+  '/dashboard/notices': 'Notices',
+  '/dashboard/materials': 'Study Materials',
+  '/dashboard/batches': 'Classes & Sections',
   '/dashboard/syllabus': 'Syllabus',
   '/dashboard/ai-tests': 'Create Class Test',
   '/dashboard/exams': 'Class Tests',
@@ -175,7 +180,7 @@ export function Header() {
               variant="outline"
               size="sm"
               className="hidden sm:inline-flex"
-              onClick={() => router.push('/my-exams')}
+              onClick={() => router.push('/student')}
             >
               Student Portal
             </Button>

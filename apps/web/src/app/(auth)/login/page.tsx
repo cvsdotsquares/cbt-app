@@ -39,12 +39,7 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setRedirectTo(getSafeRedirectPath(params.get('redirect')));
-    const isLocal =
-      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const api = isLocal
-      ? (process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || 'http://localhost:4000/api/v1')
-      : '/api/v1';
-    fetch(`${api}/health/ready`, { cache: 'no-store' }).catch(() => {});
+    fetch('/api/v1/health/ready', { cache: 'no-store' }).catch(() => {});
   }, []);
 
   function readCredentials(form: HTMLFormElement) {
@@ -87,7 +82,8 @@ export default function LoginPage() {
       if (result.accessToken && result.refreshToken && result.user) {
         const roles = normalizeRoles(result.user.roles);
         const isAdminUser = await setAuth({ ...result.user, roles } as never, result.accessToken, result.refreshToken);
-        router.replace(redirectTo ?? (isAdminUser ? '/dashboard' : '/my-exams'));
+        const { getPortalHome } = await import('@/lib/roles');
+        router.replace(redirectTo ?? (isAdminUser ? '/dashboard' : getPortalHome(roles)));
         return;
       }
       setError('Login failed. Please try again.');

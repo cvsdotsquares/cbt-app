@@ -27,7 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
 
     if (!staffUser) {
-      router.replace('/my-exams');
+      router.replace('/student');
       return;
     }
 

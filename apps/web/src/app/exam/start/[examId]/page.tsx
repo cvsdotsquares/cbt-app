@@ -268,7 +268,7 @@ export default function ExamStartPage() {
   if (!ready) return <div className="flex min-h-screen items-center justify-center">Loading...</div>;
   if (error) return (
     <div className="flex min-h-screen items-center justify-center">
-      <Card className="p-6"><p className="text-destructive">{error}</p><Button className="mt-4" onClick={() => router.push('/my-exams')}>Back</Button></Card>
+      <Card className="p-6"><p className="text-destructive">{error}</p><Button className="mt-4" onClick={() => router.push('/student/exams')}>Back</Button></Card>
     </div>
   );
   if (!session || !securityReady) return <div className="flex min-h-screen items-center justify-center">Initializing secure exam environment...</div>;
@@ -303,7 +303,7 @@ export default function ExamStartPage() {
               >
                 Enter Fullscreen &amp; Continue
               </Button>
-              <Button variant="ghost" onClick={() => router.push('/my-exams')}>Back to My Exams</Button>
+              <Button variant="ghost" onClick={() => router.push('/student/exams')}>Back to My Exams</Button>
             </div>
           </CardContent>
         </Card>
@@ -319,7 +319,7 @@ export default function ExamStartPage() {
             <h2 className="text-2xl font-bold">Exam Submitted</h2>
             <p className="text-4xl font-bold text-primary">{result.totalScore}/{result.maxScore}</p>
             <p className="text-xl">{result.percentage.toFixed(1)}%</p>
-            <Button onClick={() => router.push('/my-exams')}>Back to My Exams</Button>
+            <Button onClick={() => router.push('/student/exams')}>Back to My Exams</Button>
           </CardContent>
         </Card>
       </div>

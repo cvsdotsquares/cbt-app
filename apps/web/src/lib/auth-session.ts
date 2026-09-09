@@ -52,6 +52,6 @@ export function redirectAfterLogin(
   redirectTo?: string | null,
 ) {
   const safe = getSafeRedirectPath(redirectTo ?? null);
-  const target = safe ?? (isAdminUser ? '/dashboard' : '/my-exams');
+  const target = safe ?? (isAdminUser ? '/dashboard' : '/student');
   window.location.assign(target);
 }

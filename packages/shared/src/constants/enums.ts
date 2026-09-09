@@ -16,7 +16,59 @@ export enum Role {
   EVALUATOR = 'EVALUATOR',
   CANDIDATE = 'CANDIDATE',
   STUDENT = 'STUDENT',
+  PARENT = 'PARENT',
   AUDITOR = 'AUDITOR',
+  ACCOUNTANT = 'ACCOUNTANT',
+  LIBRARIAN = 'LIBRARIAN',
+  TRANSPORT_ADMIN = 'TRANSPORT_ADMIN',
+  HR_MANAGER = 'HR_MANAGER',
+  DRIVER = 'DRIVER',
+}
+
+export enum DayOfWeek {
+  MONDAY = 'MONDAY',
+  TUESDAY = 'TUESDAY',
+  WEDNESDAY = 'WEDNESDAY',
+  THURSDAY = 'THURSDAY',
+  FRIDAY = 'FRIDAY',
+  SATURDAY = 'SATURDAY',
+  SUNDAY = 'SUNDAY',
+}
+
+export enum AttendanceStatus {
+  PRESENT = 'PRESENT',
+  ABSENT = 'ABSENT',
+  LATE = 'LATE',
+  LEAVE = 'LEAVE',
+  HALF_DAY = 'HALF_DAY',
+}
+
+export enum HomeworkSubmissionStatus {
+  PENDING = 'PENDING',
+  SUBMITTED = 'SUBMITTED',
+  LATE = 'LATE',
+  GRADED = 'GRADED',
+}
+
+export enum NoticeTarget {
+  ALL = 'ALL',
+  BATCH = 'BATCH',
+  ACADEMIC_CLASS = 'ACADEMIC_CLASS',
+}
+
+export enum LiveClassProvider {
+  JITSI = 'JITSI',
+  ZOOM = 'ZOOM',
+  GOOGLE_MEET = 'GOOGLE_MEET',
+  MICROSOFT_TEAMS = 'MICROSOFT_TEAMS',
+  CUSTOM = 'CUSTOM',
+}
+
+export enum LiveClassStatus {
+  SCHEDULED = 'SCHEDULED',
+  LIVE = 'LIVE',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
 }
 
 export enum QuestionType {

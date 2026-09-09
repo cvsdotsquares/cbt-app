@@ -163,6 +163,81 @@
     box-shadow: 0 0 20px -4px hsl(239 84% 67% / 0.5);
   }
 
+  /* ─── Student & Parent portals ─────────────────────────────── */
+  .portal-student-bg {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(at 0% 0%, hsl(239 84% 67% / 0.1) 0px, transparent 45%),
+      radial-gradient(at 100% 0%, hsl(199 89% 48% / 0.07) 0px, transparent 45%),
+      radial-gradient(at 80% 100%, hsl(262 83% 58% / 0.06) 0px, transparent 50%);
+  }
+
+  .portal-parent-bg {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(at 0% 0%, hsl(160 84% 39% / 0.09) 0px, transparent 45%),
+      radial-gradient(at 100% 0%, hsl(38 92% 50% / 0.06) 0px, transparent 45%),
+      radial-gradient(at 50% 100%, hsl(172 66% 40% / 0.05) 0px, transparent 50%);
+  }
+
+  .portal-sidebar-student {
+    background: linear-gradient(165deg, hsl(224 71% 4%) 0%, hsl(239 45% 14%) 55%, hsl(262 40% 16%) 100%);
+  }
+
+  .portal-sidebar-parent {
+    background: linear-gradient(165deg, hsl(160 35% 8%) 0%, hsl(224 71% 5%) 45%, hsl(172 30% 12%) 100%);
+  }
+
+  .hero-banner-student {
+    @apply relative overflow-hidden rounded-2xl border border-indigo-500/25 p-5 sm:p-7 md:p-8;
+    background: linear-gradient(135deg, hsl(239 84% 67% / 0.12) 0%, hsl(262 83% 58% / 0.07) 45%, hsl(199 89% 48% / 0.04) 100%);
+  }
+  .hero-banner-student .portal-hero-orb {
+    background: radial-gradient(circle, hsl(239 84% 67% / 0.45) 0%, transparent 70%);
+  }
+  .hero-banner-student .portal-hero-orb-secondary {
+    background: radial-gradient(circle, hsl(262 83% 58% / 0.35) 0%, transparent 70%);
+  }
+
+  .hero-banner-parent {
+    @apply relative overflow-hidden rounded-2xl border border-emerald-500/25 p-5 sm:p-7 md:p-8;
+    background: linear-gradient(135deg, hsl(160 84% 39% / 0.11) 0%, hsl(172 66% 40% / 0.07) 45%, hsl(38 92% 50% / 0.04) 100%);
+  }
+  .hero-banner-parent .portal-hero-orb {
+    background: radial-gradient(circle, hsl(160 84% 39% / 0.4) 0%, transparent 70%);
+  }
+  .hero-banner-parent .portal-hero-orb-secondary {
+    background: radial-gradient(circle, hsl(38 92% 50% / 0.3) 0%, transparent 70%);
+  }
+
+  .nav-active-glow-student {
+    box-shadow: 0 0 22px -4px hsl(239 84% 67% / 0.55), inset 0 1px 0 hsl(255 100% 100% / 0.08);
+  }
+
+  .nav-active-glow-parent {
+    box-shadow: 0 0 22px -4px hsl(160 84% 39% / 0.5), inset 0 1px 0 hsl(255 100% 100% / 0.08);
+  }
+
+  .portal-header-student {
+    border-bottom-color: hsl(239 84% 67% / 0.15);
+    background: linear-gradient(180deg, hsl(var(--card) / 0.85) 0%, hsl(var(--card) / 0.65) 100%);
+  }
+
+  .portal-header-parent {
+    border-bottom-color: hsl(160 84% 39% / 0.15);
+    background: linear-gradient(180deg, hsl(var(--card) / 0.85) 0%, hsl(var(--card) / 0.65) 100%);
+  }
+
+  .portal-sidebar-brand-student {
+    background: linear-gradient(135deg, hsl(239 84% 67% / 0.2) 0%, hsl(262 83% 58% / 0.1) 100%);
+    border-color: hsl(239 84% 67% / 0.25);
+  }
+
+  .portal-sidebar-brand-parent {
+    background: linear-gradient(135deg, hsl(160 84% 39% / 0.2) 0%, hsl(172 66% 40% / 0.1) 100%);
+    border-color: hsl(160 84% 39% / 0.25);
+  }
+
   /* Exam fullscreen — fill viewport; pairs with requestFullscreen({ navigationUI: 'hide' }) */
   html.exam-fullscreen-active,
   html:fullscreen,

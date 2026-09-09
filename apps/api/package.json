@@ -5,6 +5,7 @@
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
+    "prestart": "node -e \"const fs=require('fs');if(!fs.existsSync('dist/main.js')){console.error('\\nAPI not built. For development run: npm run dev\\nFor production run: npm run build && npm start\\n');process.exit(1)}\"",
     "start": "node dist/main",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",

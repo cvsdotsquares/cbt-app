@@ -19,7 +19,7 @@ export function useRequireAuth(adminOnly = false) {
     }
 
     if (adminOnly && user && !isAdmin(roles)) {
-      router.replace('/my-exams');
+      router.replace('/student');
     }
   }, [_hasHydrated, isAuthenticated, accessToken, adminOnly, user, roles, router]);
 

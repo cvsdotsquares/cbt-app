@@ -8,11 +8,46 @@ function isRetryableStatus(status: number, raw: string): boolean {
   return trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html');
 }
 
+export function isLocalApiBase(baseUrl: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(baseUrl.replace(/\/$/, ''));
+}
+
+/** Same-origin `/api/v1` proxy — never cold-start retry (local dev or Vercel → Render). */
+function isSameOriginApiProxy(url: string): boolean {
+  return url.startsWith('/api/');
+}
+
+function resolveRequestOrigin(url: string): string | null {
+  if (isSameOriginApiProxy(url)) {
+    if (typeof window !== 'undefined') return window.location.origin;
+    return null;
+  }
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** Render free-tier wake-up retries — production remote API only. */
+export function shouldUseColdStartRetry(url: string): boolean {
+  if (process.env.NODE_ENV !== 'production') return false;
+  if (isSameOriginApiProxy(url)) return false;
+  const origin = resolveRequestOrigin(url);
+  if (origin && isLocalApiBase(origin)) return false;
+  return true;
+}
+
 export async function fetchWithColdStartRetry(
   url: string,
   init: RequestInit,
   isRetryable: (status: number, raw: string) => boolean = isRetryableStatus,
 ): Promise<Response> {
+  const origin = resolveRequestOrigin(url);
+  if (isSameOriginApiProxy(url) || (origin && isLocalApiBase(origin))) {
+    return fetch(url, { ...init, cache: 'no-store' });
+  }
+
   let lastResponse: Response | null = null;
   for (let attempt = 0; attempt < COLD_START_MAX_ATTEMPTS; attempt++) {
     try {
